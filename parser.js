@@ -411,7 +411,12 @@
     const nodes = new Map();
     const globalLabels = new Map();
     const parseErrors = [];
+    // 保留原 JSON array 作為 raw source（翻譯流程要用：BuildSO + WriteJson）
+    const rawNodes = Array.isArray(jsonArray) ? jsonArray : [];
+    // nodeIndex 對應 v2 的 SO node index（UID 計算的一部分）
+    let nodeIndex = -1;
     for (const node of jsonArray) {
+      nodeIndex++;
       if (!node.title || node.body == null) continue;
       try {
         const parsed = parseNodeBody(node.body);
@@ -419,7 +424,8 @@
           title: node.title,
           body: node.body,
           statements: parsed.statements,
-          labels: parsed.labels
+          labels: parsed.labels,
+          nodeIndex,
         });
         for (const labelName of parsed.labels.keys()) {
           if (!globalLabels.has(labelName)) globalLabels.set(labelName, node.title);
@@ -432,11 +438,12 @@
           title: node.title,
           body: node.body,
           statements: [{ type: 'line', speaker: '', text: `[解析失敗: ${e.message}]` }],
-          labels: new Map()
+          labels: new Map(),
+          nodeIndex,
         });
       }
     }
-    return { nodes, globalLabels, parseErrors };
+    return { nodes, globalLabels, parseErrors, rawNodes };
   }
 
   global.YarnParser = { parseNodeBody, parseProject, stripMarkup, markupToSafeHtml };

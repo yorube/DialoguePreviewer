@@ -436,6 +436,9 @@
   async function selectLocale(loc) {
     state.activeLocale = loc;
     await loadAndShowCurrent();
+    if (typeof TranslationUI !== 'undefined' && TranslationUI.notifyLocaleChange) {
+      TranslationUI.notifyLocaleChange();
+    }
   }
 
   async function loadAndShowCurrent() {
@@ -814,6 +817,38 @@
     }
     tEl.appendChild(row);
     tEl.scrollTop = tEl.scrollHeight;
+    return row;
+  }
+
+  // 給 translation-ui 用：算出當前行/選項的 UID（v2 一致：en-US source guid + nodeIndex + lineNumber）
+  function computeLineUid(srcLine) {
+    if (srcLine == null) return null;
+    if (!state.activeGroup) return null;
+    const groupMap = state.groups.get(state.activeGroup);
+    if (!groupMap) return null;
+    const enEntry = groupMap.get('en-US');
+    if (!enEntry) return null;
+    const proj = activeProject();
+    if (!proj) return null;
+    const nodeTitle = state.runtime && state.runtime.currentNodeTitle;
+    if (!nodeTitle) return null;
+    const nodeData = proj.nodes.get(nodeTitle);
+    if (!nodeData || nodeData.nodeIndex == null) return null;
+    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return null;
+    return TranslationUI.getUidFor(enEntry.filename, nodeData.nodeIndex, srcLine);
+  }
+
+  // 把 transcript 行的譯文/原文挑出來：
+  //   - Translation Mode off：直接回傳原文（runtime 給的 text）
+  //   - Translation Mode on ：用 UID 在 TranslationState 找；找不到 → 回原文 + status=untranslated
+  function getDisplayedText(originalText, srcLine) {
+    if (typeof TranslationUI === 'undefined' || !TranslationUI.isActive()) {
+      return { text: originalText, info: null };
+    }
+    const uid = computeLineUid(srcLine);
+    if (!uid) return { text: originalText, info: null };
+    const info = TranslationUI.lookupLine(uid, originalText);
+    return { text: info.text, info };
   }
 
   function appendContinueAction() {
@@ -838,11 +873,14 @@
       num.textContent = (i + 1) + '.';
       btn.appendChild(num);
 
+      // 翻譯模式下把選項文字也換成譯文（read-only；要編輯選項請從 transcript 上重新選擇後）
+      const original = item.text || '(empty)';
+      const disp = getDisplayedText(original, item.srcLine);
       const txt = document.createElement('span');
-      txt.innerHTML = YarnParser.markupToSafeHtml(item.text || '(empty)');
+      txt.innerHTML = YarnParser.markupToSafeHtml(disp.text);
       btn.appendChild(txt);
 
-      btn.onclick = () => chooseForward(i, item.text || '(empty)');
+      btn.onclick = () => chooseForward(i, disp.text);
       tEl.appendChild(btn);
     });
     tEl.scrollTop = tEl.scrollHeight;
@@ -896,7 +934,11 @@
       appendTranscript('jump', t('transcript.jumpTo', { title: rt.currentNodeTitle }));
     }
     if (rt.current.kind === 'line') {
-      appendTranscript('line', rt.current.text, formatSpeaker(rt.current));
+      const disp = getDisplayedText(rt.current.text, rt.current.srcLine);
+      const row = appendTranscript('line', disp.text, formatSpeaker(rt.current));
+      if (disp.info && typeof TranslationUI !== 'undefined' && TranslationUI.decorateLine) {
+        TranslationUI.decorateLine(row, disp.info, rt.current.text);
+      }
     }
     // 'choices' rows are not appended; they appear as pending-action buttons.
   }
@@ -1130,6 +1172,25 @@
       state.nodeFilter = e.target.value.trim();
       refreshNodeList();
     });
+
+    // Translation tab UI（如果模組有載入的話）。提供 hooks 讓它讀 ui.js 的 state。
+    if (typeof TranslationUI !== 'undefined') {
+      TranslationUI.install({
+        getActiveGroup:  () => state.activeGroup,
+        getActiveLocale: () => state.activeLocale,
+        getAllGroups:    () => Array.from(state.groups.keys()),
+        getEntry:        (group, locale) => {
+          const m = state.groups.get(group);
+          return m ? m.get(locale) : null;
+        },
+        setStatus,
+        // 收到 redraw 請求 → 從當前 node 重新跑一次顯示
+        requestRedraw: () => {
+          const title = state.runtime && state.runtime.currentNodeTitle;
+          if (title) startAt(title);
+        },
+      });
+    }
 
     // Global keyboard shortcuts (skip when typing in form fields).
     document.addEventListener('keydown', e => {

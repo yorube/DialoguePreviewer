@@ -110,6 +110,8 @@ function Copy-AndSanitize {
 
 # scripts: canonical-base -> @{ locales = @{ locale -> destFilename } }
 $scripts = @{}
+# guids: destFilename -> guid (從 .meta 取出，給翻譯工具算 UID 用)
+$guids = [ordered]@{}
 
 foreach ($dir in $SourceDir) {
     if (-not (Test-Path $dir)) {
@@ -156,6 +158,17 @@ foreach ($dir in $SourceDir) {
             $scripts[$canon] = @{ locales = @{} }
         }
         $scripts[$canon].locales[$locale] = $name
+
+        # 抽 .meta 的 guid（給翻譯工具算 UID = guid + nodeIdx + lineIdx 用）
+        # 注意：v2 LocKit 的 UID 是基於這個 source .meta 的 guid，所以同名 json 在不同
+        # 資料夾會有不同 guid。先掃到的優先 = LocKit 對齊。
+        $metaPath = "$($_.FullName).meta"
+        if (Test-Path $metaPath) {
+            $metaText = [IO.File]::ReadAllText($metaPath, [Text.Encoding]::UTF8)
+            if ($metaText -match '(?m)^guid:\s*([0-9a-f]+)') {
+                $guids[$name] = $Matches[1]
+            }
+        }
     }
 }
 
@@ -179,6 +192,88 @@ foreach ($base in ($scripts.Keys | Sort-Object)) {
 $manifestJson = $manifest | ConvertTo-Json -Depth 6
 $manifestPath = Join-Path $OutDir 'manifest.json'
 [IO.File]::WriteAllText($manifestPath, $manifestJson, [Text.UTF8Encoding]::new($false))
+
+# 寫 guids.json (filename → guid)
+$guidsPath = Join-Path $OutDir 'guids.json'
+[IO.File]::WriteAllText($guidsPath, ($guids | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+Write-Host "guids.json: $($guids.Count) 條對應 → $guidsPath" -ForegroundColor Green
+
+# --- character key + per-locale translation map -----------------------------
+# 給翻譯流程用：source 對話的角色名是 en-US（例如 "Lawrence Chang"），要轉成
+# 目標語言的角色名（例如 "Лоуренс ЧFан"）。需要兩張表：
+#   character-keys.json         : en-US name → Key
+#   character-translations.json : Key → { locale → name }
+#
+# 翻譯對照表 sheet6 (角色) 欄位順序（與 ReleasedLanguage enum 對齊）：
+#   A=Gender, B=Key, C=zh-TW, D=zh-CN, E=en-US, F=ja-JP, G=it-IT, H=ru-RU, I=es-ES, J=fr-FR
+function Build-CharacterTranslationMaps {
+    param([string]$XlsxPath, [string]$OutDir)
+    if (-not (Test-Path $XlsxPath)) { return }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+    $zip = [IO.Compression.ZipFile]::OpenRead($XlsxPath)
+    try {
+        $ssEntry = $zip.Entries | Where-Object FullName -eq 'xl/sharedStrings.xml'
+        if (-not $ssEntry) { return }
+        $ssXml = [xml]([IO.StreamReader]::new($ssEntry.Open()).ReadToEnd())
+        $ns = New-Object Xml.XmlNamespaceManager($ssXml.NameTable)
+        $ns.AddNamespace('x', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main')
+        $strings = @()
+        foreach ($si in $ssXml.SelectNodes('//x:si', $ns)) {
+            $strings += -join ($si.SelectNodes('.//x:t', $ns) | ForEach-Object { $_.InnerText })
+        }
+        $sheetEntry = $zip.Entries | Where-Object FullName -eq 'xl/worksheets/sheet6.xml'
+        if (-not $sheetEntry) { return }
+        $sx = [xml]([IO.StreamReader]::new($sheetEntry.Open()).ReadToEnd())
+        $rows = $sx.SelectNodes('//x:row', $ns)
+        if (-not $rows -or $rows.Count -lt 4) { return }
+
+        $enToKey    = [ordered]@{}
+        $keyToTrans = [ordered]@{}
+
+        # 跳過前 3 列（標題 / 註解 / 字體設定）
+        for ($i = 3; $i -lt $rows.Count; $i++) {
+            $row = $rows[$i]
+            $cells = @{}
+            foreach ($c in $row.SelectNodes('x:c', $ns)) {
+                $v = $c.SelectSingleNode('x:v', $ns)
+                if (-not $v) { continue }
+                $col = ($c.GetAttribute('r') -replace '\d', '')
+                if ($c.GetAttribute('t') -eq 's') {
+                    $cells[$col] = $strings[[int]$v.InnerText]
+                } else {
+                    $cells[$col] = $v.InnerText
+                }
+            }
+            $key = $cells['B']
+            if (-not $key -or $key.StartsWith('//')) { continue }
+
+            $enUS = $cells['E']
+            if ($enUS -and -not $enToKey.Contains($enUS)) {
+                $enToKey[$enUS] = $key
+            }
+
+            $keyToTrans[$key] = [ordered]@{
+                'zh-TW' = $cells['C']
+                'zh-CN' = $cells['D']
+                'en-US' = $cells['E']
+                'ja-JP' = $cells['F']
+                'it-IT' = $cells['G']
+                'ru-RU' = $cells['H']
+                'es-ES' = $cells['I']
+                'fr-FR' = $cells['J']
+            }
+        }
+
+        $keysOut  = Join-Path $OutDir 'character-keys.json'
+        $transOut = Join-Path $OutDir 'character-translations.json'
+        [IO.File]::WriteAllText($keysOut,  ($enToKey    | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($transOut, ($keyToTrans | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+        Write-Host ("character-keys.json: " + $enToKey.Count + " 條對應 → " + $keysOut)
+        Write-Host ("character-translations.json: " + $keyToTrans.Count + " 條對應 → " + $transOut)
+    } finally {
+        $zip.Dispose()
+    }
+}
 
 # --- speaker → gender map -----------------------------------------------
 # 從翻譯對照表 xlsx 的 sheet6 (角色) 抽出 Gender 欄,各 locale 名字 → M/F/N
@@ -245,6 +340,9 @@ if ($xlsxPath) {
     $speakerOut = Join-Path $OutDir 'speakers.json'
     $count = Build-SpeakerGenderMap -XlsxPath $xlsxPath.Path -OutPath $speakerOut
     Write-Host ("speakers.json: " + $count + " 條對應 → " + $speakerOut)
+
+    # 翻譯流程要的：en-US 角色名 → Key、Key → {locale → name}
+    Build-CharacterTranslationMaps -XlsxPath $xlsxPath.Path -OutDir $OutDir
 }
 
 Write-Host ""
