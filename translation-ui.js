@@ -525,7 +525,7 @@
         const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
         if (!activeLocale) { alert(t('tr.alert.pickLocale')); return; }
         if (isSourceLocale(activeLocale)) {
-            alert(t('tr.alert.sourceLocale', { locale: activeLocale }));
+            alert(t('tr.alert.sourceLocaleDownload', { locale: activeLocale }));
             return;
         }
         if (typeof LocWriter === 'undefined') {
