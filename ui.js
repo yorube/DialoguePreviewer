@@ -89,6 +89,37 @@
       'tooltip.overridden': 'Overridden by user',
       'tooltip.rewind': 'Rewind to this line',
       'tooltip.gender': 'Grammatical gender (for translation)',
+      // ----- Translation Edit Mode -----
+      'tr.editMode': '✏️ Translation Edit Mode',
+      'tr.editMode.tip': 'Enable to inline-edit translations on the dialogue preview. Edits are saved in your browser only.',
+      'tr.upload': '📥 Upload',
+      'tr.upload.tip': 'Upload your filled .csv / .xlsx — fully replaces the current language with the new file.',
+      'tr.download': '💾 Download',
+      'tr.download.tip': 'Download a .csv / .xlsx with the same format you uploaded, with translations + inline edits filled in.',
+      'tr.reset': '🔁 Reset',
+      'tr.reset.tip': 'Clear uploaded translation + inline edits for this language. Falls back to bundled defaults.',
+      'tr.editBtn.tip': 'Edit this line (Ctrl/Cmd+Enter to save, Esc to cancel)',
+      'tr.editConfirm': '✓ Save',
+      'tr.editCancel': '✗ Cancel',
+      'tr.stats.noLocale': 'Pick a target language first',
+      'tr.stats.notLoaded': '{locale}: no translation file loaded',
+      'tr.stats.loaded': '{locale}: baseline {b} / inline edits {o}',
+      'tr.stats.loadedFile': ' ({file})',
+      'tr.stats.loading': 'Loading translation tables…',
+      'tr.alert.pickLocale': 'Please switch the Language selector to your target language (e.g. fr-FR / ru-RU) before uploading.',
+      'tr.alert.sourceLocale': 'You picked a source language ({locale}); translation flow only applies to target languages.',
+      'tr.alert.parseFailed': 'Parse failed: {msg}',
+      'tr.alert.loaded': 'Loaded {locale}:\n  file: {file}\n  rows: {total}\n  with translation: {translated}\n  missing UID: {missing}',
+      'tr.alert.warnings': '\n\n⚠️ Warnings:\n  {head}',
+      'tr.alert.warningsMore': '\n  …({n} more, see console)',
+      'tr.alert.noBaseline': 'No translation file uploaded yet. Please upload first, then edit + download.',
+      'tr.alert.noSource': 'Source structure missing (probably dropped due to localStorage quota). Please re-upload your original .csv / .xlsx, then download.',
+      'tr.alert.downloadFailed': 'Failed to write translation file: {msg}',
+      'tr.alert.resetEmpty': 'Nothing to reset for {locale}.',
+      'tr.confirm.replace': 'Fully replace {locale} with the uploaded file?\n\n  current baseline: {b} entries\n  current inline edits: {o} entries',
+      'tr.confirm.replaceOverrideWarn': '\n\n⚠️ You have {o} inline edits that will be wiped completely when you upload. The whole {locale} will follow the new file.\n\nIf you don\'t want to lose them: press [💾 Download] first to save your current state, then upload.',
+      'tr.confirm.localeMismatch': 'Detected locale "{got}" in the file, but you selected "{want}". Apply this file as the {want} translation anyway? (Usually means the file or selection is wrong.)',
+      'tr.confirm.reset': 'Reset {locale}?\n\n  baseline (uploaded): {b} entries\n  inline edits: {o} entries\n\nAfter reset the preview falls back to the bundled default ({locale}).json. This cannot be undone.',
     },
     zh: {
       'topbar.script': '劇本',
@@ -126,6 +157,37 @@
       'tooltip.overridden': '使用者覆寫',
       'tooltip.rewind': '退回到此句',
       'tooltip.gender': '文法性別（翻譯用）',
+      // ----- 翻譯編輯模式 -----
+      'tr.editMode': '✏️ 翻譯編輯模式',
+      'tr.editMode.tip': '開啟後，可以在對話預覽上點 ✏️ 直接修改該句譯文。所有改動只存在你的瀏覽器內。',
+      'tr.upload': '📥 上傳譯文',
+      'tr.upload.tip': '上傳填好的 .csv / .xlsx — 會「整個替換」當前語言為新檔內容。',
+      'tr.download': '💾 下載譯文',
+      'tr.download.tip': '下載與上傳同格式的 .csv / .xlsx，譯文欄填上目前所有上傳 + 站內編輯的最新內容。',
+      'tr.reset': '🔁 重置',
+      'tr.reset.tip': '清掉這個語言的「上傳譯文 + 站內編輯」，回到 bundle 預設的譯文。',
+      'tr.editBtn.tip': '編輯這句譯文（Ctrl/Cmd+Enter 存、Esc 取消）',
+      'tr.editConfirm': '✓ 儲存',
+      'tr.editCancel': '✗ 取消',
+      'tr.stats.noLocale': '請先選擇目標語言',
+      'tr.stats.notLoaded': '{locale}：尚未載入譯文檔',
+      'tr.stats.loaded': '{locale}：基準 {b} 條 / 站內編輯 {o} 條',
+      'tr.stats.loadedFile': '（{file}）',
+      'tr.stats.loading': '載入翻譯對照表中…',
+      'tr.alert.pickLocale': '請先在右上「Language」切換到要載入的目標語言（如 fr-FR / ru-RU）。',
+      'tr.alert.sourceLocale': '你選的是來源語言（{locale}），翻譯流程僅適用於目標語言。',
+      'tr.alert.parseFailed': '解析失敗：{msg}',
+      'tr.alert.loaded': '已載入 {locale} 譯文：\n  檔案：{file}\n  資料列：{total}\n  含譯文：{translated}\n  缺 UID：{missing}',
+      'tr.alert.warnings': '\n\n⚠️ 警告：\n  {head}',
+      'tr.alert.warningsMore': '\n  …（再 {n} 條，請看 console）',
+      'tr.alert.noBaseline': '尚未上傳任何譯文檔。請先上傳，編輯完再下載。',
+      'tr.alert.noSource': '找不到當初上傳檔案的結構（可能 localStorage 容量不夠被丟掉）。請重新上傳一次原始 .csv / .xlsx，再下載。',
+      'tr.alert.downloadFailed': '產出譯文檔失敗：{msg}',
+      'tr.alert.resetEmpty': '{locale} 沒有需要重置的內容。',
+      'tr.confirm.replace': '要把 {locale} 整個替換成上傳檔的內容嗎？\n\n  目前基準：{b} 條\n  目前站內編輯：{o} 條',
+      'tr.confirm.replaceOverrideWarn': '\n\n⚠️ 你目前有 {o} 條站內編輯會被「全部清掉」，整個 {locale} 以新檔為準。\n\n如果不想丟掉：先按 [💾 下載譯文] 把目前狀態存下來，再上傳。',
+      'tr.confirm.localeMismatch': '偵測到的翻譯欄位是「{got}」，但你目前選的語言是「{want}」。要把這份檔案套用為 {want} 的譯文嗎？（通常表示你選錯語言或檔案標頭錯誤）',
+      'tr.confirm.reset': '要重置 {locale} 嗎？\n\n  上傳基準：{b} 條\n  站內編輯：{o} 條\n\n重置後預覽會回到 bundle 預設的 ({locale}).json 內容。此動作無法復原。',
     },
   };
 
@@ -1158,6 +1220,8 @@
         if (!Number.isNaN(idx)) rewindToSnapshot(idx);
         return;
       }
+      // 在翻譯模式的編輯器內部（含按鈕、textarea、邊距）按一下不應該推進對話
+      if (e.target.closest('.t-inline-editor') || e.target.closest('.t-edit-btn')) return;
       if (e.target.closest('.choice-btn') || e.target.closest('.continue-btn')) return;
       const sel = window.getSelection?.();
       if (sel && sel.toString()) return;
@@ -1184,6 +1248,8 @@
           return m ? m.get(locale) : null;
         },
         setStatus,
+        t,                                            // 翻譯字串
+        applyI18n,                                    // 注入新 DOM 後重跑 i18n
         // 收到 redraw 請求 → 從當前 node 重新跑一次顯示
         requestRedraw: () => {
           const title = state.runtime && state.runtime.currentNodeTitle;
