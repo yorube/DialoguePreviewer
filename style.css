@@ -35,6 +35,15 @@ body.dragover { outline: 3px dashed var(--accent); outline-offset: -8px; }
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
+/* 第二行：全域功能列。比第一行略亮，做出視覺分層但維持暗色 */
+.topbar-globalops {
+  background: var(--bg3);
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  min-height: 36px;  /* 即使 translation-ui.js 還沒注入也保留位置 */
+}
+.topbar-globalops:empty { padding: 0; min-height: 0; border: 0; }
 .brand {
   font-weight: 600;
   color: var(--accent);
@@ -181,13 +190,9 @@ body.dragging-splitter * { user-select: none; }
   border-bottom-color: var(--accent);
   background: rgba(76, 193, 255, 0.06);
 }
-.notes-tab-dot {
-  display: none;
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: #f0b958;
-}
-.source-tab.has-note .notes-tab-dot { display: inline-block; }
+/* Notes tab + dialogue 📝 button：原本會有黃點提示 has-note，
+   但譯者覺得多餘，整個拿掉 */
+.notes-tab-dot { display: none !important; }
 
 .src-zoom { display: inline-flex; gap: 2px; align-self: center; }
 .source-panel.tab-notes .src-zoom { display: none; }
@@ -276,6 +281,19 @@ body.dragging-splitter * { user-select: none; }
   border-bottom: 1px solid var(--border);
   margin-bottom: 6px;
 }
+.sidebar-title-spaced { margin-top: 14px; }
+.sidebar-select {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.sidebar-select:focus { outline: 1px solid var(--accent); }
 #node-list {
   list-style: none;
   padding: 0;
@@ -325,6 +343,17 @@ body.dragging-splitter * { user-select: none; }
   flex-direction: column;
   min-height: 0;
 }
+/* 對話介面最上方：Edit Mode 切換列。空時佔 0 高度。 */
+.dialogue-modebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 6px 32px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.dialogue-modebar:empty { padding: 0; border: 0; }
 .dialogue-header {
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
@@ -349,13 +378,11 @@ body.dragging-splitter * { user-select: none; }
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
 }
-/* Toolbar 📝 button: small amber dot when current node already has a note. */
+/* Toolbar 📝 button：原本 has-note 時顯示琥珀色點點，譯者覺得多餘整個拿掉。 */
 .note-toggle-btn { position: relative; }
 .note-toggle-btn.has-note::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  right: 2px;
+  content: none;
+  display: none;
   width: 6px;
   height: 6px;
   background: #f0b958;

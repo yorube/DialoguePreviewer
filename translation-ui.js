@@ -69,42 +69,36 @@
 
     function injectStyles() {
         const css = `
-        .topbar .ctrl.t-ctrl {
+        .ctrl.t-ctrl {
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            padding: 3px 8px;
+            padding: 4px 10px;
             background: rgba(120, 180, 255, 0.10);
             border: 1px solid rgba(120, 180, 255, 0.30);
-            border-radius: 3px;
+            border-radius: 4px;
             cursor: pointer;
             user-select: none;
-            font-size: 12px;
-            color: inherit;
+            font-size: 13px;
+            color: var(--fg);
         }
-        .topbar .ctrl.t-ctrl:hover { background: rgba(120, 180, 255, 0.22); }
-        .topbar .ctrl.t-ctrl.danger { background: rgba(220, 120, 120, 0.10); border-color: rgba(220, 120, 120, 0.35); }
-        .topbar .ctrl.t-ctrl.danger:hover { background: rgba(220, 120, 120, 0.22); }
-        .topbar .ctrl.t-ctrl.active {
+        .ctrl.t-ctrl:hover { background: rgba(120, 180, 255, 0.22); }
+        .ctrl.t-ctrl.danger { background: rgba(220, 120, 120, 0.10); border-color: rgba(220, 120, 120, 0.35); }
+        .ctrl.t-ctrl.danger:hover { background: rgba(220, 120, 120, 0.22); }
+        .ctrl.t-ctrl.active {
             background: rgba(80, 180, 100, 0.25);
             border-color: rgba(80, 180, 100, 0.7);
         }
-        .topbar .t-divider {
-            width: 1px;
-            height: 18px;
-            background: rgba(255,255,255,0.15);
-            margin: 0 4px;
-            display: inline-block;
-        }
-        .topbar input[type="file"].t-file { display: none; }
-        .topbar .t-stats {
+        input[type="file"].t-file { display: none; }
+        .t-stats {
             font-size: 11px;
-            color: #aaa;
-            font-family: monospace;
+            color: var(--fg-dim);
+            font-family: ui-monospace, "Cascadia Code", monospace;
             white-space: nowrap;
+            align-self: center;
         }
-        .topbar .t-stats .stat-good { color: #88e088; }
-        .topbar .t-stats .stat-warn { color: #e0c060; }
+        .t-stats .stat-good { color: #88e088; }
+        .t-stats .stat-warn { color: #e0c060; }
 
         .row-line.t-untranslated .text {
             opacity: 0.55;
@@ -164,71 +158,68 @@
     }
 
     function injectToolbar() {
-        const topbar = document.querySelector('.topbar');
-        if (!topbar) return;
-        const status = topbar.querySelector('#status');
+        // 第二行 topbar：Upload / Download / Reset / stats
+        const ops = document.getElementById('topbar-globalops');
+        if (ops) {
+            // Upload (file label)
+            const uploadLabel = document.createElement('label');
+            uploadLabel.className = 'ctrl t-ctrl';
+            uploadLabel.dataset.i18nTitle = 'tr.upload.tip';
+            const uploadText = document.createElement('span');
+            uploadText.dataset.i18n = 'tr.upload';
+            uploadText.textContent = '📥 Upload translation file';
+            const uploadInput = document.createElement('input');
+            uploadInput.type = 'file';
+            uploadInput.id = 't-upload-input';
+            uploadInput.accept = '.csv,.xlsx,.xls';
+            uploadInput.className = 't-file';
+            uploadInput.addEventListener('change', onUpload);
+            uploadLabel.appendChild(uploadText);
+            uploadLabel.appendChild(uploadInput);
+            ops.appendChild(uploadLabel);
 
-        // Divider
-        const divider = document.createElement('span');
-        divider.className = 't-divider';
-        topbar.insertBefore(divider, status);
+            // Download
+            const dlBtn = document.createElement('button');
+            dlBtn.id = 't-download-loc';
+            dlBtn.className = 'ctrl t-ctrl';
+            dlBtn.type = 'button';
+            dlBtn.dataset.i18n = 'tr.download';
+            dlBtn.dataset.i18nTitle = 'tr.download.tip';
+            dlBtn.textContent = '💾 Download translation file';
+            dlBtn.addEventListener('click', onDownloadLocFile);
+            ops.appendChild(dlBtn);
 
-        // Toggle button
-        const toggle = document.createElement('button');
-        toggle.id = 't-mode-toggle';
-        toggle.className = 'ctrl t-ctrl';
-        toggle.type = 'button';
-        toggle.dataset.i18n = 'tr.editMode';
-        toggle.dataset.i18nTitle = 'tr.editMode.tip';
-        toggle.textContent = 'Translation Edit Mode';
-        toggle.addEventListener('click', toggleMode);
-        topbar.insertBefore(toggle, status);
+            // Reset
+            const rstBtn = document.createElement('button');
+            rstBtn.id = 't-reset';
+            rstBtn.className = 'ctrl t-ctrl danger';
+            rstBtn.type = 'button';
+            rstBtn.dataset.i18n = 'tr.reset';
+            rstBtn.dataset.i18nTitle = 'tr.reset.tip';
+            rstBtn.textContent = '🔁 Reset this language';
+            rstBtn.addEventListener('click', onResetLocale);
+            ops.appendChild(rstBtn);
 
-        // Upload (file label)
-        const uploadLabel = document.createElement('label');
-        uploadLabel.className = 'ctrl t-ctrl';
-        uploadLabel.dataset.i18nTitle = 'tr.upload.tip';
-        uploadLabel.title = 'Upload';
-        const uploadText = document.createElement('span');
-        uploadText.dataset.i18n = 'tr.upload';
-        uploadText.textContent = 'Upload';
-        const uploadInput = document.createElement('input');
-        uploadInput.type = 'file';
-        uploadInput.id = 't-upload-input';
-        uploadInput.accept = '.csv,.xlsx,.xls';
-        uploadInput.className = 't-file';
-        uploadInput.addEventListener('change', onUpload);
-        uploadLabel.appendChild(uploadText);
-        uploadLabel.appendChild(uploadInput);
-        topbar.insertBefore(uploadLabel, status);
+            // Stats（右側）
+            const stats = document.createElement('span');
+            stats.id = 't-stats';
+            stats.className = 't-stats';
+            ops.appendChild(stats);
+        }
 
-        // Download button
-        const dlBtn = document.createElement('button');
-        dlBtn.id = 't-download-loc';
-        dlBtn.className = 'ctrl t-ctrl';
-        dlBtn.type = 'button';
-        dlBtn.dataset.i18n = 'tr.download';
-        dlBtn.dataset.i18nTitle = 'tr.download.tip';
-        dlBtn.textContent = 'Download';
-        dlBtn.addEventListener('click', onDownloadLocFile);
-        topbar.insertBefore(dlBtn, status);
-
-        // Reset button
-        const rstBtn = document.createElement('button');
-        rstBtn.id = 't-reset';
-        rstBtn.className = 'ctrl t-ctrl danger';
-        rstBtn.type = 'button';
-        rstBtn.dataset.i18n = 'tr.reset';
-        rstBtn.dataset.i18nTitle = 'tr.reset.tip';
-        rstBtn.textContent = 'Reset';
-        rstBtn.addEventListener('click', onResetLocale);
-        topbar.insertBefore(rstBtn, status);
-
-        // Stats
-        const stats = document.createElement('span');
-        stats.id = 't-stats';
-        stats.className = 't-stats';
-        topbar.insertBefore(stats, status);
+        // 對話介面最上方：Edit Mode toggle
+        const modebar = document.getElementById('dialogue-modebar');
+        if (modebar) {
+            const toggle = document.createElement('button');
+            toggle.id = 't-mode-toggle';
+            toggle.className = 'ctrl t-ctrl';
+            toggle.type = 'button';
+            toggle.dataset.i18n = 'tr.editMode';
+            toggle.dataset.i18nTitle = 'tr.editMode.tip';
+            toggle.textContent = '✏️ Translation Edit Mode';
+            toggle.addEventListener('click', toggleMode);
+            modebar.appendChild(toggle);
+        }
     }
 
     function toggleMode() {

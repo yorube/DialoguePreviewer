@@ -7,30 +7,37 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="topbar">
+<!-- 第一行：設定列（語言選擇 + UI 語言 + brand / status） -->
+<header class="topbar topbar-settings">
   <span class="brand">MBU Yarn Preview</span>
   <span class="app-version" id="app-version" aria-label="version"></span>
-  <label class="ctrl"><span data-i18n="topbar.script">Script</span>
-    <select id="script-select"></select>
-  </label>
-  <label class="ctrl"><span data-i18n="topbar.locale">Language</span>
+  <label class="ctrl"><span data-i18n="topbar.locale">Text language</span>
     <select id="locale-select"></select>
   </label>
-  <label class="ctrl file-ctrl"><span data-i18n="btn.loadJson">📂 Load .json</span>
-    <input type="file" id="file-input" accept=".json" multiple hidden>
-  </label>
-  <label class="ctrl ui-lang-ctrl"><span data-i18n="topbar.uiLang">UI</span>
+  <label class="ctrl ui-lang-ctrl"><span data-i18n="topbar.uiLang">Interface language</span>
     <select id="ui-lang-select">
       <option value="en">English</option>
       <option value="zh">繁體中文</option>
     </select>
   </label>
+  <label class="ctrl file-ctrl" title="Manually load .json (fallback)"><span data-i18n="btn.loadJson">📂 Load .json</span>
+    <input type="file" id="file-input" accept=".json" multiple hidden>
+  </label>
   <span id="status" class="status"></span>
 </header>
 
+<!-- 第二行：全域功能列（翻譯流程的上傳 / 下載 / 重置；由 translation-ui.js 注入內容） -->
+<header class="topbar topbar-globalops" id="topbar-globalops"></header>
+
 <main class="layout">
   <aside class="sidebar">
+    <!-- Script 選擇放到 sidebar 最上方 -->
     <div class="sidebar-title">
+      <span data-i18n="topbar.script">Script</span>
+    </div>
+    <select id="script-select" class="sidebar-select"></select>
+
+    <div class="sidebar-title sidebar-title-spaced">
       <span data-i18n="sidebar.nodes">Nodes</span> <span id="node-count" class="count"></span>
     </div>
     <input id="node-filter" type="search" data-i18n-placeholder="input.filter" placeholder="Filter…" class="node-filter">
@@ -45,7 +52,6 @@
         <button class="source-tab active" data-tab="source" data-i18n="panel.source">Source</button>
         <button class="source-tab" data-tab="notes" id="notes-tab-btn">
           <span data-i18n="panel.notes">Notes</span>
-          <span class="notes-tab-dot" aria-hidden="true"></span>
         </button>
       </div>
       <span class="src-zoom">
@@ -66,6 +72,8 @@
   <div class="splitter" data-split="source-dialogue"></div>
 
   <section class="dialogue">
+    <!-- Edit Mode 切換在標題上方 -->
+    <div class="dialogue-modebar" id="dialogue-modebar"></div>
     <header class="dialogue-header">
       <h1 id="current-node">—</h1>
     </header>
