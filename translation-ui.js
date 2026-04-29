@@ -53,6 +53,8 @@
             catch (e) { STATE.characterKeys = {}; }
             try { STATE.characterTranslations = await fetchJson('data/character-translations.json'); }
             catch (e) { STATE.characterTranslations = {}; }
+            try { STATE.speakerGender = await fetchJson('data/speakers.json'); }
+            catch (e) { STATE.speakerGender = {}; }
             STATE.ready = true;
             updateStats();
         })();
@@ -552,51 +554,63 @@
         }
     }
 
-    // Build a CSV source structure from the en-US project AST across every
-    // loaded script. Used when the translator has been editing inline without
-    // uploading a baseline file.
+    // Build the v2 LocKit 6-column CSV (Type, Gender, CharacterName, en-US,
+    // {locale}, ID) by re-running YarnConverter.buildSO on every loaded en-US
+    // project — same code path Unity v2 uses, so the file is import-ready.
+    // Used when the translator edited inline without uploading a baseline.
     function buildSyntheticSource(targetLocale) {
         if (!STATE.hooks || !STATE.hooks.getAllGroups || !STATE.hooks.getEntry) return null;
         if (!STATE.guids) return null;
-        const headers = ['UID', 'en-US', targetLocale];
+        if (typeof YarnConverter === 'undefined') return null;
+
+        const headers = ['Type', 'Gender', 'CharacterName', 'en-US', targetLocale, 'ID'];
         const rows = [];
+        const charCtx = {
+            characterKeys: STATE.characterKeys || {},
+            characterTranslations: STATE.characterTranslations || {},
+            locale: 'en-US',
+        };
+        const genderMap = STATE.speakerGender || {};
+
         for (const group of STATE.hooks.getAllGroups()) {
             const enEntry = STATE.hooks.getEntry(group, 'en-US');
             if (!enEntry || !enEntry.project) continue;
             const guid = STATE.guids[enEntry.filename];
             if (!guid) continue;
-            for (const [, nodeData] of enEntry.project.nodes) {
-                collectTranslatableRows(nodeData.statements, guid, nodeData.nodeIndex, rows);
+            const rawNodes = enEntry.project.rawNodes || [];
+            let so;
+            try {
+                so = YarnConverter.buildSO(rawNodes, guid, charCtx);
+            } catch (e) {
+                console.warn('[translation-ui] buildSO failed for', enEntry.filename, e);
+                continue;
+            }
+            for (const node of so) {
+                for (const line of node.textLines) {
+                    if (line.category !== 'Dialogue' && line.category !== 'Option') continue;
+                    if (!line.dialogue) continue;
+                    rows.push([
+                        line.category,
+                        genderMap[line.characterName] || '',
+                        line.characterName || '',
+                        line.dialogue,
+                        '',
+                        line.uid,
+                    ]);
+                }
             }
         }
+
         if (rows.length === 0) return null;
         return {
             format: 'csv',
             fileName: `${targetLocale}_translations.csv`,
             headers,
             rows,
-            idCol: 0,
-            localeCol: 2,
+            idCol: 5,
+            localeCol: 4,
             csvHasBom: true,
         };
-    }
-
-    function collectTranslatableRows(statements, guid, nodeIndex, rows) {
-        for (const s of statements) {
-            if (s.type === 'line' && s.srcLine != null && s.text) {
-                rows.push([`${guid}-${nodeIndex}-${s.srcLine}`, s.text, '']);
-            } else if (s.type === 'choices') {
-                for (const item of s.items) {
-                    if (item.srcLine != null && item.text) {
-                        rows.push([`${guid}-${nodeIndex}-${item.srcLine}`, item.text, '']);
-                    }
-                    if (item.body) collectTranslatableRows(item.body, guid, nodeIndex, rows);
-                }
-            } else if (s.type === 'if') {
-                if (s.then) collectTranslatableRows(s.then, guid, nodeIndex, rows);
-                if (s.else) collectTranslatableRows(s.else, guid, nodeIndex, rows);
-            }
-        }
     }
 
     function downloadBlob(blob, filename) {
