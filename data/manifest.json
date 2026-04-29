@@ -1,0 +1,233 @@
+{
+    "generatedAt":  "2026-04-29T18:56:06.7504592+08:00",
+    "scripts":  [
+                    {
+                        "name":  "yarn_工廠_支線對話",
+                        "locales":  {
+                                        "en-US":  "yarn_工廠_支線對話（240419）(en-US).json",
+                                        "es-ES":  "yarn_工廠_支線對話（240419）(es-ES).json",
+                                        "it-IT":  "yarn_工廠_支線對話（240419）(it-IT).json",
+                                        "ja-JP":  "yarn_工廠_支線對話（240419）(ja-JP).json",
+                                        "ru-RU":  "yarn_工廠_支線對話（240419）(ru-RU).json",
+                                        "zh-CN":  "yarn_工廠_支線對話（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_工廠_支線對話.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_工廠_第二日_阿凡動畫",
+                        "locales":  {
+                                        "en-US":  "yarn_工廠_第二日_阿凡動畫（231204）(en-US).json",
+                                        "es-ES":  "yarn_工廠_第二日_阿凡動畫（231204）(es-ES).json",
+                                        "it-IT":  "yarn_工廠_第二日_阿凡動畫（231204）(it-IT).json",
+                                        "ja-JP":  "yarn_工廠_第二日_阿凡動畫（231122）(ja-JP).json",
+                                        "ru-RU":  "yarn_工廠_第二日_阿凡動畫（231204）(ru-RU).json",
+                                        "zh-CN":  "yarn_工廠_第二日_阿凡動畫（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_工廠_第二日_阿凡動畫.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_工廠_第三日",
+                        "locales":  {
+                                        "en-US":  "yarn_工廠_第三日（231226）(en-US).json",
+                                        "es-ES":  "yarn_工廠_第三日（231226）(es-ES).json",
+                                        "it-IT":  "yarn_工廠_第三日（231226）(it-IT).json",
+                                        "ja-JP":  "yarn_工廠_第三日（231215）(ja-JP).json",
+                                        "ru-RU":  "yarn_工廠_第三日（231226）(ru-RU).json",
+                                        "zh-CN":  "yarn_工廠_第三日（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_工廠_第三日.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_工廠_第四日",
+                        "locales":  {
+                                        "en-US":  "yarn_工廠_第四日（240208）(en-US).json",
+                                        "es-ES":  "yarn_工廠_第四日（240208）(es-ES).json",
+                                        "it-IT":  "yarn_工廠_第四日（240208）(it-IT).json",
+                                        "ja-JP":  "yarn_工廠_第四日（240208）(ja-JP).json",
+                                        "ru-RU":  "yarn_工廠_第四日（240208）(ru-RU).json",
+                                        "zh-CN":  "yarn_工廠_第四日（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_工廠_第四日.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_工廠_路人對話",
+                        "locales":  {
+                                        "en-US":  "yarn_工廠_路人對話（240419）(en-US).json",
+                                        "es-ES":  "yarn_工廠_路人對話（240419）(es-ES).json",
+                                        "it-IT":  "yarn_工廠_路人對話（240419）(it-IT).json",
+                                        "ja-JP":  "yarn_工廠_路人對話（240419）(ja-JP).json",
+                                        "ru-RU":  "yarn_工廠_路人對話（240419）(ru-RU).json",
+                                        "zh-CN":  "yarn_工廠_路人對話（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_工廠_路人對話.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_主角家",
+                        "locales":  {
+                                        "en-US":  "yarn_主角家(en-US).json",
+                                        "es-ES":  "yarn_主角家(es-ES).json",
+                                        "it-IT":  "yarn_主角家(it-IT).json",
+                                        "ja-JP":  "yarn_主角家(ja-JP).json",
+                                        "ru-RU":  "yarn_主角家(ru-RU).json",
+                                        "zh-CN":  "yarn_主角家(zh-CN).json",
+                                        "zh-TW":  "yarn_主角家.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_主角家+街景_第二日",
+                        "locales":  {
+                                        "en-US":  "yarn_主角家+街景_第二日（231204）(en-US).json",
+                                        "es-ES":  "yarn_主角家+街景_第二日（231204）(es-ES).json",
+                                        "it-IT":  "yarn_主角家+街景_第二日（231204）(it-IT).json",
+                                        "ja-JP":  "yarn_主角家+街景_第二日（231114）(ja-JP).json",
+                                        "ru-RU":  "yarn_主角家+街景_第二日（231204）(ru-RU).json",
+                                        "zh-CN":  "yarn_主角家+街景_第二日（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_主角家+街景_第二日.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_主角家+街景_第三日",
+                        "locales":  {
+                                        "en-US":  "yarn_主角家+街景_第三日（231226）(en-US).json",
+                                        "es-ES":  "yarn_主角家+街景_第三日（231226）(es-ES).json",
+                                        "it-IT":  "yarn_主角家+街景_第三日（231226）(it-IT).json",
+                                        "ja-JP":  "yarn_主角家+街景_第三日（231215）(ja-JP).json",
+                                        "ru-RU":  "yarn_主角家+街景_第三日（231226）(ru-RU).json",
+                                        "zh-CN":  "yarn_主角家+街景_第三日（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_主角家+街景_第三日.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_主角家+街景_第四日",
+                        "locales":  {
+                                        "en-US":  "yarn_主角家+街景_第四日（240208）(en-US).json",
+                                        "es-ES":  "yarn_主角家+街景_第四日（240208）(es-ES).json",
+                                        "it-IT":  "yarn_主角家+街景_第四日（240208）(it-IT).json",
+                                        "ja-JP":  "yarn_主角家+街景_第四日（240208）(ja-JP).json",
+                                        "ru-RU":  "yarn_主角家+街景_第四日（240208）(ru-RU).json",
+                                        "zh-CN":  "yarn_主角家+街景_第四日（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_主角家+街景_第四日.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_回家_第二日_阿凡動畫",
+                        "locales":  {
+                                        "en-US":  "yarn_回家_第二日_阿凡動畫 （231204）(en-US).json",
+                                        "es-ES":  "yarn_回家_第二日_阿凡動畫 （231204）(es-ES).json",
+                                        "it-IT":  "yarn_回家_第二日_阿凡動畫 （231204）(it-IT).json",
+                                        "ja-JP":  "yarn_回家_第二日_阿凡動畫 （231215）(ja-JP).json",
+                                        "ru-RU":  "yarn_回家_第二日_阿凡動畫 （231204）(ru-RU).json",
+                                        "zh-CN":  "yarn_回家_第二日_阿凡動畫（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_回家_第二日_阿凡動畫.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_回家_第三日",
+                        "locales":  {
+                                        "en-US":  "yarn_回家_第三日（231226）(en-US).json",
+                                        "es-ES":  "yarn_回家_第三日（231226）(es-ES).json",
+                                        "it-IT":  "yarn_回家_第三日（231226）(it-IT).json",
+                                        "ja-JP":  "yarn_回家_第三日（231215）(ja-JP).json",
+                                        "ru-RU":  "yarn_回家_第三日（231226）(ru-RU).json",
+                                        "zh-CN":  "yarn_回家_第三日（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_回家_第三日.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_回家_第四日",
+                        "locales":  {
+                                        "en-US":  "yarn_回家_第四日（240208）(en-US).json",
+                                        "es-ES":  "yarn_回家_第四日（240208）(es-ES).json",
+                                        "it-IT":  "yarn_回家_第四日（240208）(it-IT).json",
+                                        "ja-JP":  "yarn_回家_第四日（240208）(ja-JP).json",
+                                        "ru-RU":  "yarn_回家_第四日（240208）(ru-RU).json",
+                                        "zh-CN":  "yarn_回家_第四日（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_回家_第四日.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_後日談",
+                        "locales":  {
+                                        "en-US":  "yarn_後日談（240419）(en-US).json",
+                                        "es-ES":  "yarn_後日談（240419）(es-ES).json",
+                                        "it-IT":  "yarn_後日談（240419）(it-IT).json",
+                                        "ja-JP":  "yarn_後日談（240419）(ja-JP).json",
+                                        "ru-RU":  "yarn_後日談（240419）(ru-RU).json",
+                                        "zh-CN":  "yarn_後日談（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_後日談.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_教學關",
+                        "locales":  {
+                                        "en-US":  "yarn_教學關(en-US).json",
+                                        "es-ES":  "yarn_教學關(es-ES).json",
+                                        "it-IT":  "yarn_教學關(it-IT).json",
+                                        "ja-JP":  "yarn_教學關(ja-JP).json",
+                                        "ru-RU":  "yarn_教學關(ru-RU).json",
+                                        "zh-CN":  "yarn_教學關(zh-CN).json",
+                                        "zh-TW":  "yarn_教學關.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_異常後日談",
+                        "locales":  {
+                                        "en-US":  "yarn_異常後日談 (en-US).json",
+                                        "es-ES":  "yarn_異常後日談 (es-ES).json",
+                                        "it-IT":  "yarn_異常後日談 (it-IT).json",
+                                        "ja-JP":  "yarn_異常後日談 (ja-JP).json",
+                                        "ru-RU":  "yarn_異常後日談 (ru-RU).json",
+                                        "zh-CN":  "yarn_異常後日談 (zh-CN).json",
+                                        "zh-TW":  "yarn_異常後日談.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_第五日",
+                        "locales":  {
+                                        "en-US":  "yarn_第五日（240419）(en-US).json",
+                                        "es-ES":  "yarn_第五日（240419）(es-ES).json",
+                                        "it-IT":  "yarn_第五日（240419）(it-IT).json",
+                                        "ja-JP":  "yarn_第五日（240419）(ja-JP).json",
+                                        "ru-RU":  "yarn_第五日（240419）(ru-RU).json",
+                                        "zh-CN":  "yarn_第五日（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_第五日.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_街景_路人對話",
+                        "locales":  {
+                                        "en-US":  "yarn_街景_路人對話（240419）(en-US).json",
+                                        "es-ES":  "yarn_街景_路人對話（240419）(es-ES).json",
+                                        "it-IT":  "yarn_街景_路人對話（240419）(it-IT).json",
+                                        "ja-JP":  "yarn_街景_路人對話（240419）(ja-JP).json",
+                                        "ru-RU":  "yarn_街景_路人對話（240419）(ru-RU).json",
+                                        "zh-CN":  "yarn_街景_路人對話（240512）(zh-CN).json",
+                                        "zh-TW":  "yarn_街景_路人對話.json"
+                                    }
+                    },
+                    {
+                        "name":  "yarn_街景對話",
+                        "locales":  {
+                                        "en-US":  "yarn_街景對話(en-US).json",
+                                        "es-ES":  "yarn_街景對話(es-ES).json",
+                                        "it-IT":  "yarn_街景對話(it-IT).json",
+                                        "ja-JP":  "yarn_街景對話(ja-JP).json",
+                                        "ru-RU":  "yarn_街景對話(ru-RU).json",
+                                        "zh-CN":  "yarn_街景對話(zh-CN).json",
+                                        "zh-TW":  "yarn_街景對話.json"
+                                    }
+                    },
+                    {
+                        "name":  "工廠第一日-阿凡動畫",
+                        "locales":  {
+                                        "en-US":  "工廠第一日-阿凡動畫（231121）(en-US).json",
+                                        "es-ES":  "工廠第一日-阿凡動畫（231121）(es-ES).json",
+                                        "it-IT":  "工廠第一日-阿凡動畫（231121）(it-IT).json",
+                                        "ja-JP":  "工廠第一日-阿凡動畫（231114）(ja-JP).json",
+                                        "ru-RU":  "工廠第一日-阿凡動畫（231121）(ru-RU).json",
+                                        "zh-CN":  "工廠第一日-阿凡動畫（240512）(zh-CN).json",
+                                        "zh-TW":  "工廠第一日-阿凡動畫.json"
+                                    }
+                    }
+                ]
+}

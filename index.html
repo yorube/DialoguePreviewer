@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MBU Yarn Preview</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">MBU Yarn Preview</span>
+  <span class="app-version" id="app-version" aria-label="version"></span>
+  <label class="ctrl"><span data-i18n="topbar.script">Script</span>
+    <select id="script-select"></select>
+  </label>
+  <label class="ctrl"><span data-i18n="topbar.locale">Language</span>
+    <select id="locale-select"></select>
+  </label>
+  <label class="ctrl file-ctrl"><span data-i18n="btn.loadJson">📂 Load .json</span>
+    <input type="file" id="file-input" accept=".json" multiple hidden>
+  </label>
+  <label class="ctrl ui-lang-ctrl"><span data-i18n="topbar.uiLang">UI</span>
+    <select id="ui-lang-select">
+      <option value="en">English</option>
+      <option value="zh">繁體中文</option>
+    </select>
+  </label>
+  <span id="status" class="status"></span>
+</header>
+
+<main class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-title">
+      <span data-i18n="sidebar.nodes">Nodes</span> <span id="node-count" class="count"></span>
+    </div>
+    <input id="node-filter" type="search" data-i18n-placeholder="input.filter" placeholder="Filter…" class="node-filter">
+    <ul id="node-list"></ul>
+  </aside>
+
+  <div class="splitter" data-split="sidebar-source"></div>
+
+  <aside class="source-panel">
+    <div class="source-header">
+      <div class="source-tabs">
+        <button class="source-tab active" data-tab="source" data-i18n="panel.source">Source</button>
+        <button class="source-tab" data-tab="notes" id="notes-tab-btn">
+          <span data-i18n="panel.notes">Notes</span>
+          <span class="notes-tab-dot" aria-hidden="true"></span>
+        </button>
+      </div>
+      <span class="src-zoom">
+        <button id="src-zoom-out" class="src-zoom-btn" title="A-">A-</button>
+        <button id="src-zoom-in" class="src-zoom-btn" title="A+">A+</button>
+      </span>
+    </div>
+    <div id="source-pane-source" class="source-pane active">
+      <div id="source-view" class="source-view"></div>
+    </div>
+    <div id="source-pane-notes" class="source-pane">
+      <textarea id="note-textarea" class="note-textarea-full"
+        data-i18n-placeholder="note.placeholder"
+        placeholder="Add a translator note for this node…"></textarea>
+    </div>
+  </aside>
+
+  <div class="splitter" data-split="source-dialogue"></div>
+
+  <section class="dialogue">
+    <header class="dialogue-header">
+      <h1 id="current-node">—</h1>
+    </header>
+    <div class="dialogue-toolbar">
+      <button id="back-line-btn" class="action-btn" title="←" data-i18n="btn.stepBack">← Step back</button>
+      <button id="replay-btn" class="action-btn" title="R" data-i18n="btn.replayNode">⟳ Replay this node</button>
+      <button id="note-toggle" class="action-btn note-toggle-btn" type="button"
+        data-i18n="btn.openNote" title="Open notes tab">📝 Note</button>
+    </div>
+    <div id="transcript" class="transcript"></div>
+  </section>
+
+  <div class="splitter" data-split="dialogue-vars"></div>
+
+  <aside class="vars-panel">
+    <div class="sidebar-title" data-i18n="panel.vars">Variables</div>
+    <div id="vars"></div>
+  </aside>
+</main>
+
+<div class="hint">
+  <span data-i18n="hint.drop">Drop per-locale .json files into the window, or click "Load .json" above.</span><br>
+  <span data-i18n="hint.keys">Keys: Space/Enter to continue, 1-9 to pick option.</span>
+</div>
+
+<script src="parser.js"></script>
+<script src="runtime.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>
