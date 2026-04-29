@@ -526,16 +526,21 @@
             alert(t('tr.alert.sourceLocale', { locale: activeLocale }));
             return;
         }
-        const ts = STATE.states.get(activeLocale);
-        if (!ts) { alert(t('tr.alert.noBaseline')); return; }
-        const source = ts.getSource();
-        if (!source) { alert(t('tr.alert.noSource')); return; }
         if (typeof LocWriter === 'undefined') {
             console.error('LocWriter missing');
             return;
         }
+        const ts = STATE.states.get(activeLocale);
+        // If the user uploaded a file we keep their original format byte-for-byte.
+        // Otherwise (inline-edits-only) we synthesize a CSV from the en-US project
+        // AST so they can still download their progress.
+        let source = ts ? ts.getSource() : null;
+        if (!source) {
+            source = buildSyntheticSource(activeLocale);
+            if (!source) { alert(t('tr.alert.noBaseline')); return; }
+        }
         try {
-            const merged = ts.buildMergedMap();
+            const merged = ts ? ts.buildMergedMap() : new Map();
             const result = LocWriter.writeLocFile(source, merged, {});
             const blob = result.payload instanceof Blob
                 ? result.payload
@@ -544,6 +549,53 @@
         } catch (e) {
             console.error('[translation-ui] download loc failed:', e);
             alert(t('tr.alert.downloadFailed', { msg: e.message }));
+        }
+    }
+
+    // Build a CSV source structure from the en-US project AST across every
+    // loaded script. Used when the translator has been editing inline without
+    // uploading a baseline file.
+    function buildSyntheticSource(targetLocale) {
+        if (!STATE.hooks || !STATE.hooks.getAllGroups || !STATE.hooks.getEntry) return null;
+        if (!STATE.guids) return null;
+        const headers = ['UID', 'en-US', targetLocale];
+        const rows = [];
+        for (const group of STATE.hooks.getAllGroups()) {
+            const enEntry = STATE.hooks.getEntry(group, 'en-US');
+            if (!enEntry || !enEntry.project) continue;
+            const guid = STATE.guids[enEntry.filename];
+            if (!guid) continue;
+            for (const [, nodeData] of enEntry.project.nodes) {
+                collectTranslatableRows(nodeData.statements, guid, nodeData.nodeIndex, rows);
+            }
+        }
+        if (rows.length === 0) return null;
+        return {
+            format: 'csv',
+            fileName: `${targetLocale}_translations.csv`,
+            headers,
+            rows,
+            idCol: 0,
+            localeCol: 2,
+            csvHasBom: true,
+        };
+    }
+
+    function collectTranslatableRows(statements, guid, nodeIndex, rows) {
+        for (const s of statements) {
+            if (s.type === 'line' && s.srcLine != null && s.text) {
+                rows.push([`${guid}-${nodeIndex}-${s.srcLine}`, s.text, '']);
+            } else if (s.type === 'choices') {
+                for (const item of s.items) {
+                    if (item.srcLine != null && item.text) {
+                        rows.push([`${guid}-${nodeIndex}-${item.srcLine}`, item.text, '']);
+                    }
+                    if (item.body) collectTranslatableRows(item.body, guid, nodeIndex, rows);
+                }
+            } else if (s.type === 'if') {
+                if (s.then) collectTranslatableRows(s.then, guid, nodeIndex, rows);
+                if (s.else) collectTranslatableRows(s.else, guid, nodeIndex, rows);
+            }
         }
     }
 
