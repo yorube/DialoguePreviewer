@@ -100,15 +100,18 @@
         .t-stats .stat-good { color: #88e088; }
         .t-stats .stat-warn { color: #e0c060; }
 
-        .row-line.t-untranslated .text {
+        .row-line.t-untranslated .text,
+        .row-choice.t-untranslated .choice-text {
             opacity: 0.55;
             font-style: italic;
         }
-        .row-line.t-overridden .text {
+        .row-line.t-overridden .text,
+        .row-choice.t-overridden .choice-text {
             border-left: 2px solid #88c8ff;
             padding-left: 4px;
         }
-        .row-line .t-edit-btn {
+        .row-line .t-edit-btn,
+        .row-choice .t-edit-btn {
             margin-left: 6px;
             padding: 0 4px;
             background: transparent;
@@ -119,8 +122,14 @@
             color: inherit;
             font-size: 12px;
         }
-        .row-line:hover .t-edit-btn { opacity: 1; }
-        .row-line .t-edit-btn:hover { background: rgba(255,255,255,0.08); border-color: #555; }
+        .row-line:hover .t-edit-btn,
+        .row-choice:hover .t-edit-btn { opacity: 1; }
+        .row-line .t-edit-btn:hover,
+        .row-choice .t-edit-btn:hover { background: rgba(255,255,255,0.08); border-color: #555; }
+        /* Choice wrapper: keep button + ✏️ + editor on the same flow. */
+        .row-choice { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px; margin: 2px 0; }
+        .row-choice .choice-btn { flex: 1 1 auto; }
+        .row-choice .t-inline-editor { flex-basis: 100%; margin-left: 0; }
 
         .t-inline-editor {
             display: flex;

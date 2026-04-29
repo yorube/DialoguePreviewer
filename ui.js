@@ -928,29 +928,74 @@
   function appendChoiceActions(items) {
     const tEl = $('transcript');
     items.forEach((item, i) => {
+      // Wrapper carries pending-action + translation data; decorateLine attaches
+      // ✏️ and the inline editor here as siblings of the button (textarea inside
+      // a <button> would be invalid HTML).
+      const wrap = document.createElement('div');
+      wrap.className = 'row row-choice pending-action';
+
       const btn = document.createElement('button');
-      btn.className = 'choice-btn pending-action';
+      btn.className = 'choice-btn';
 
       const num = document.createElement('span');
       num.className = 'choice-num';
       num.textContent = (i + 1) + '.';
       btn.appendChild(num);
 
-      // 翻譯模式下把選項文字也換成譯文（read-only；要編輯選項請從 transcript 上重新選擇後）
       const original = item.text || '(empty)';
       const disp = getDisplayedText(original, item.srcLine);
       const txt = document.createElement('span');
+      txt.className = 'choice-text';
       txt.innerHTML = YarnParser.markupToSafeHtml(disp.text);
       btn.appendChild(txt);
 
-      btn.onclick = () => chooseForward(i, disp.text);
-      tEl.appendChild(btn);
+      // Click uses live text so an edited translation is what gets recorded.
+      btn.onclick = () => chooseForward(i, txt.textContent || disp.text);
+      wrap.appendChild(btn);
+
+      if (disp.info && typeof TranslationUI !== 'undefined' && TranslationUI.decorateLine) {
+        TranslationUI.decorateLine(wrap, disp.info, original);
+      }
+
+      tEl.appendChild(wrap);
     });
     tEl.scrollTop = tEl.scrollHeight;
   }
 
   function removePendingActions() {
     document.querySelectorAll('.pending-action').forEach(el => el.remove());
+  }
+
+  // Refresh translation text + Edit Mode decorations on every already-rendered
+  // row (lines in the transcript and pending choice options) without resetting
+  // the runtime or transcript. Called on Edit Mode toggle, inline edit confirm,
+  // and locale upload.
+  function redrawTranslationsInPlace() {
+    if (typeof TranslationUI === 'undefined' || !TranslationUI.lookupLine) return;
+    const tEl = $('transcript');
+
+    const refresh = (rowEl, textSelector) => {
+      const uid = rowEl.dataset.tUid;
+      const original = rowEl.dataset.tOriginal;
+      if (!uid) return;
+      const info = TranslationUI.lookupLine(uid, original);
+      const textEl = rowEl.querySelector(textSelector);
+      if (textEl && typeof YarnParser !== 'undefined') {
+        textEl.innerHTML = YarnParser.markupToSafeHtml(info.text);
+      }
+      // Strip prior Edit Mode decoration before re-applying.
+      rowEl.classList.remove('t-line', 't-untranslated', 't-overridden');
+      const oldBtn = rowEl.querySelector(':scope > .t-edit-btn');
+      if (oldBtn) oldBtn.remove();
+      const oldEditor = rowEl.querySelector(':scope > .t-inline-editor');
+      if (oldEditor) oldEditor.remove();
+      if (TranslationUI.decorateLine) {
+        TranslationUI.decorateLine(rowEl, info, original);
+      }
+    };
+
+    tEl.querySelectorAll('.row-line[data-t-uid]').forEach(row => refresh(row, '.text'));
+    tEl.querySelectorAll('.row-choice[data-t-uid]').forEach(row => refresh(row, '.choice-text'));
   }
 
   // Render the action area (continue / choice buttons) inline at the end of
@@ -1251,11 +1296,10 @@
         setStatus,
         t,                                            // 翻譯字串
         applyI18n,                                    // 注入新 DOM 後重跑 i18n
-        // 收到 redraw 請求 → 從當前 node 重新跑一次顯示
-        requestRedraw: () => {
-          const title = state.runtime && state.runtime.currentNodeTitle;
-          if (title) startAt(title);
-        },
+        // Non-destructive redraw: refresh translation visuals on existing
+        // transcript rows + pending choices. Toggling Edit Mode or saving an
+        // inline edit no longer rewinds the dialogue.
+        requestRedraw: redrawTranslationsInPlace,
       });
     }
 
