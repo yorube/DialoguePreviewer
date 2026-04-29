@@ -109,18 +109,24 @@
             padding-left: 4px;
         }
         .row-line .t-edit-btn {
-            margin-left: 6px;
-            padding: 0 4px;
-            background: transparent;
-            border: 1px solid transparent;
-            border-radius: 3px;
+            margin-left: 8px;
+            padding: 2px 6px;
+            background: rgba(95, 180, 255, 0.10);
+            border: 1px solid rgba(95, 180, 255, 0.30);
+            border-radius: 4px;
             cursor: pointer;
-            opacity: 0.4;
+            opacity: 0.85;
             color: inherit;
-            font-size: 12px;
+            font-size: 13px;
+            vertical-align: middle;
+            transition: opacity 0.12s, background 0.12s, transform 0.08s;
         }
         .row-line:hover .t-edit-btn { opacity: 1; }
-        .row-line .t-edit-btn:hover { background: rgba(255,255,255,0.08); border-color: #555; }
+        .row-line .t-edit-btn:hover {
+            background: rgba(95, 180, 255, 0.22);
+            border-color: rgba(95, 180, 255, 0.55);
+        }
+        .row-line .t-edit-btn:active { transform: scale(0.94); }
 
         .t-inline-editor {
             display: flex;
@@ -228,7 +234,35 @@
         if (toggle) toggle.classList.toggle('active', STATE.translationMode);
         if (STATE.translationMode) ensureLoaded();
         updateStats();
+        updateEditModeBanner();
         if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+    }
+
+    // Show a small banner when Edit Mode is on but no file is loaded for the
+    // active locale, so the user understands why ✏️ buttons aren't appearing.
+    function updateEditModeBanner() {
+        const modebar = document.getElementById('dialogue-modebar');
+        if (!modebar) return;
+        let banner = document.getElementById('t-edit-banner');
+        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+        const hasLocale = !!activeLocale && !isSourceLocale(activeLocale);
+        const hasFile = hasLocale && STATE.states.has(activeLocale);
+        const shouldShow = STATE.translationMode && !hasFile;
+        if (!shouldShow) {
+            if (banner) banner.remove();
+            return;
+        }
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 't-edit-banner';
+            banner.className = 't-edit-banner';
+            modebar.appendChild(banner);
+        }
+        if (!hasLocale) {
+            banner.textContent = '✏️ Edit Mode is on — pick a non-source language above to edit.';
+        } else {
+            banner.textContent = `✏️ Edit Mode is on — upload a .csv / .xlsx for "${activeLocale}" or hover any line to edit it inline.`;
+        }
     }
 
     function getOrCreateState(locale) {
@@ -523,7 +557,7 @@
         lookupLine,
         decorateLine,
         getUidFor,
-        notifyLocaleChange: () => updateStats(),
+        notifyLocaleChange: () => { updateStats(); updateEditModeBanner(); },
         isActive: () => STATE.translationMode,
     };
 })(typeof window !== 'undefined' ? window : globalThis);
