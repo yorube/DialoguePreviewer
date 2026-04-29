@@ -376,11 +376,11 @@
 
     // ----- Translation lookup（給 transcript 渲染用） -----
 
+    // 上傳的譯文 + 站內編輯永遠都覆蓋顯示（跟 Edit Mode 無關）。
+    // Edit Mode 只控制 ✏️ 按鈕 + 視覺裝飾（dim/border）。
     function lookupLine(uid, originalText) {
         const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-        if (!STATE.translationMode || !activeLocale) {
-            return { text: originalText, status: 'inactive', uid };
-        }
+        if (!activeLocale) return { text: originalText, status: 'inactive', uid };
         const ts = STATE.states.get(activeLocale);
         if (!ts) return { text: originalText, status: 'untranslated', uid };
         const text = ts.get(uid);
@@ -391,12 +391,14 @@
     }
 
     function decorateLine(rowEl, info, originalText) {
-        if (!STATE.translationMode || !info || !info.uid) return;
+        if (!info || !info.uid) return;
+        rowEl.dataset.tUid = info.uid;
+        rowEl.dataset.tOriginal = originalText;
+        // Edit Mode 才顯示視覺裝飾與 ✏️ 編輯按鈕；非 Edit Mode 只悄悄帶 data 屬性
+        if (!STATE.translationMode) return;
         rowEl.classList.add('t-line');
         if (info.status === 'untranslated') rowEl.classList.add('t-untranslated');
         else if (info.status === 'override') rowEl.classList.add('t-overridden');
-        rowEl.dataset.tUid = info.uid;
-        rowEl.dataset.tOriginal = originalText;
 
         const editBtn = document.createElement('button');
         editBtn.className = 't-edit-btn';

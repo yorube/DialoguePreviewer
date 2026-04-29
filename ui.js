@@ -107,7 +107,7 @@
       'tr.stats.loadedFile': ' ({file})',
       'tr.stats.loading': 'Loading translation tables…',
       'tr.alert.pickLocale': 'Please switch the Language selector to your target language (e.g. fr-FR / ru-RU) before uploading.',
-      'tr.alert.sourceLocale': 'You picked a source language ({locale}); translation flow only applies to target languages.',
+      'tr.alert.sourceLocale': 'Translation upload only applies to target languages. {locale} is a source language (text comes FROM it, not into it).\n\nWhat to do:\n  1. Switch the "Text language" selector to a target language (ru-RU / fr-FR / it-IT / es-ES / ja-JP).\n  2. Then upload the matching translation file (e.g. Loc_ru-RU.csv).',
       'tr.alert.parseFailed': 'Parse failed: {msg}',
       'tr.alert.loaded': 'Loaded {locale}:\n  file: {file}\n  rows: {total}\n  with translation: {translated}\n  missing UID: {missing}',
       'tr.alert.warnings': '\n\n⚠️ Warnings:\n  {head}',
@@ -175,7 +175,7 @@
       'tr.stats.loadedFile': '（{file}）',
       'tr.stats.loading': '載入翻譯對照表中…',
       'tr.alert.pickLocale': '請先在右上「Language」切換到要載入的目標語言（如 fr-FR / ru-RU）。',
-      'tr.alert.sourceLocale': '你選的是來源語言（{locale}），翻譯流程僅適用於目標語言。',
+      'tr.alert.sourceLocale': '翻譯上傳僅適用於目標語言。{locale} 是來源語言（文本是「從」這個語言翻出去的，不是翻「到」這個語言）。\n\n要怎麼測試：\n  1. 把上方「文本語言」切到目標語言（ru-RU / fr-FR / it-IT / es-ES / ja-JP）。\n  2. 再上傳對應的翻譯檔（例如 Loc_ru-RU.csv）。',
       'tr.alert.parseFailed': '解析失敗：{msg}',
       'tr.alert.loaded': '已載入 {locale} 譯文：\n  檔案：{file}\n  資料列：{total}\n  含譯文：{translated}\n  缺 UID：{missing}',
       'tr.alert.warnings': '\n\n⚠️ 警告：\n  {head}',
@@ -901,10 +901,11 @@
   }
 
   // 把 transcript 行的譯文/原文挑出來：
-  //   - Translation Mode off：直接回傳原文（runtime 給的 text）
-  //   - Translation Mode on ：用 UID 在 TranslationState 找；找不到 → 回原文 + status=untranslated
+  //   - 已上傳譯文或站內編輯：永遠覆蓋顯示（跟 Edit Mode 無關）
+  //   - 都沒有：用 runtime 給的原文（bundled JSON 內的譯文）
+  // Edit Mode 只負責 ✏️ 按鈕 + 視覺裝飾（在 decorateLine 內判斷）
   function getDisplayedText(originalText, srcLine) {
-    if (typeof TranslationUI === 'undefined' || !TranslationUI.isActive()) {
+    if (typeof TranslationUI === 'undefined') {
       return { text: originalText, info: null };
     }
     const uid = computeLineUid(srcLine);
