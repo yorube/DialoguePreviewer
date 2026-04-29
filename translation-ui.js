@@ -41,6 +41,7 @@
         ensureLoaded();
         // 初始 stats 顯示
         updateStats();
+        refreshExportStatus();
     }
 
     async function ensureLoaded() {
@@ -101,6 +102,22 @@
         }
         .t-stats .stat-good { color: #88e088; }
         .t-stats .stat-warn { color: #e0c060; }
+        .t-export-status {
+            font-size: 11px;
+            font-family: ui-monospace, "Cascadia Code", monospace;
+            padding: 2px 8px;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+        .t-export-status:empty { display: none; }
+        .t-export-status.dirty {
+            color: #e0c060;
+            background: rgba(220, 200, 100, 0.10);
+            border: 1px solid rgba(220, 200, 100, 0.30);
+        }
+        .t-export-status.clean {
+            color: #88e088;
+        }
 
         .row-line.t-untranslated .text,
         .row-choice.t-untranslated .choice-text {
@@ -256,6 +273,12 @@
             stats.id = 't-stats';
             stats.className = 't-stats';
             ops.appendChild(stats);
+
+            // Export-state indicator (✓ saved / ⚠️ unexported edits).
+            const expStatus = document.createElement('span');
+            expStatus.id = 't-export-status';
+            expStatus.className = 't-export-status';
+            ops.appendChild(expStatus);
         }
 
         // 對話介面最上方：Edit Mode toggle
@@ -351,6 +374,9 @@
             console.log(`[translation-ui] restored ${notesRestored} translator notes from import`);
         }
 
+        // After import, local state matches the imported file → mark clean.
+        if (STATE.hooks && STATE.hooks.markExported) STATE.hooks.markExported();
+
         if (parsed.warnings.length) {
             console.warn('[translation-ui] upload warnings:', parsed.warnings);
         }
@@ -398,6 +424,50 @@
         updateStats();
         if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
     }
+
+    // ----- Export-state indicator -----
+
+    function formatAgo(ms) {
+        const m = Math.floor(ms / 60000);
+        if (m < 1) return t('tr.export.ago.lt1m');
+        if (m < 60) return t('tr.export.ago.minutes', { n: m });
+        const h = Math.floor(m / 60);
+        if (h < 24) return t('tr.export.ago.hours', { n: h });
+        return t('tr.export.ago.days', { n: Math.floor(h / 24) });
+    }
+
+    function refreshExportStatus() {
+        const el = document.getElementById('t-export-status');
+        if (!el) return;
+        if (!STATE.hooks || !STATE.hooks.getExportState) {
+            el.textContent = '';
+            el.className = 't-export-status';
+            return;
+        }
+        const s = STATE.hooks.getExportState() || {};
+        if (!s.lastEditAt) {
+            // Never edited anything → don't show indicator at all.
+            el.textContent = '';
+            el.className = 't-export-status';
+            return;
+        }
+        const dirty = !s.lastExportAt
+            || new Date(s.lastEditAt).getTime() > new Date(s.lastExportAt).getTime();
+        if (dirty) {
+            el.className = 't-export-status dirty';
+            el.textContent = s.lastExportAt
+                ? t('tr.export.dirty', { ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()) })
+                : t('tr.export.dirtyNever');
+        } else {
+            el.className = 't-export-status clean';
+            el.textContent = t('tr.export.clean', { ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()) });
+        }
+    }
+
+    // Refresh "X minutes ago" copy on a slow timer.
+    setInterval(() => {
+        try { refreshExportStatus(); } catch (e) {}
+    }, 30 * 1000);
 
     // ----- Stats display -----
 
@@ -516,6 +586,7 @@
             const newText = ta.value;
             ts.setOverride(uid, newText);
             updateStats();
+            if (STATE.hooks && STATE.hooks.markEditDirty) STATE.hooks.markEditDirty();
             close();
             if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
         });
@@ -559,6 +630,7 @@
                 ? result.payload
                 : new Blob([result.payload], { type: result.mime });
             downloadBlob(blob, result.filename);
+            if (STATE.hooks && STATE.hooks.markExported) STATE.hooks.markExported();
         } catch (e) {
             console.error('[translation-ui] download loc failed:', e);
             alert(t('tr.alert.downloadFailed', { msg: e.message }));
@@ -810,5 +882,6 @@
         getUidFor,
         notifyLocaleChange: () => updateStats(),
         isActive: () => STATE.translationMode,
+        refreshExportStatus,
     };
 })(typeof window !== 'undefined' ? window : globalThis);

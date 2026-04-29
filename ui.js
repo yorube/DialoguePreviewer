@@ -121,6 +121,13 @@
       'tr.confirm.replaceOverrideWarn': '\n\n⚠️ You have {o} inline edits that will be wiped completely when you import. The whole {locale} will follow the new file.\n\nIf you don\'t want to lose them: press [💾 Export] first to save your current state, then import.',
       'tr.confirm.localeMismatch': 'Detected locale "{got}" in the file, but you selected "{want}". Apply this file as the {want} translation anyway? (Usually means the file or selection is wrong.)',
       'tr.confirm.reset': 'Reset {locale}?\n\n  baseline (imported): {b} entries\n  inline edits: {o} entries\n\nAfter reset the preview falls back to the bundled default ({locale}).json. This cannot be undone.',
+      'tr.export.clean': '✓ Saved {ago} ago',
+      'tr.export.dirty': '⚠️ Unexported edits (last export {ago} ago)',
+      'tr.export.dirtyNever': '⚠️ Unexported edits — never exported',
+      'tr.export.ago.lt1m': '<1m',
+      'tr.export.ago.minutes': '{n}m',
+      'tr.export.ago.hours': '{n}h',
+      'tr.export.ago.days': '{n}d',
     },
     zh: {
       'topbar.script': '劇本',
@@ -190,6 +197,13 @@
       'tr.confirm.replaceOverrideWarn': '\n\n⚠️ 你目前有 {o} 條站內編輯會被「全部清掉」，整個 {locale} 以新檔為準。\n\n如果不想丟掉：先按 [💾 匯出譯文] 把目前狀態存下來，再匯入。',
       'tr.confirm.localeMismatch': '偵測到的翻譯欄位是「{got}」，但你目前選的語言是「{want}」。要把這份檔案套用為 {want} 的譯文嗎？（通常表示你選錯語言或檔案標頭錯誤）',
       'tr.confirm.reset': '要重置 {locale} 嗎？\n\n  匯入基準：{b} 條\n  站內編輯：{o} 條\n\n重置後預覽會回到 bundle 預設的 ({locale}).json 內容。此動作無法復原。',
+      'tr.export.clean': '✓ 已存檔 {ago} 前',
+      'tr.export.dirty': '⚠️ 有未匯出的編輯（上次匯出 {ago} 前）',
+      'tr.export.dirtyNever': '⚠️ 有未匯出的編輯 — 還沒匯出過',
+      'tr.export.ago.lt1m': '不到 1 分鐘',
+      'tr.export.ago.minutes': '{n} 分鐘',
+      'tr.export.ago.hours': '{n} 小時',
+      'tr.export.ago.days': '{n} 天',
     },
   };
 
@@ -279,6 +293,36 @@
   }
   function lsSetJSON(key, obj) {
     try { localStorage.setItem(key, JSON.stringify(obj)); } catch (e) {}
+  }
+
+  // ----- Export-state tracking (shared with translation-ui.js via hooks) -----
+  // lastEditAt advances when the user edits a note or confirms an inline
+  // translation override. lastExportAt advances on Export success or after
+  // Import (since import replaces local state with the imported file).
+  // dirty = lastEditAt > lastExportAt → topbar warns + beforeunload prompts.
+  function getExportState() { return lsGetJSON('yp.exportState', {}) || {}; }
+  function isExportDirty() {
+    const s = getExportState();
+    if (!s.lastEditAt) return false;
+    if (!s.lastExportAt) return true;
+    return new Date(s.lastEditAt).getTime() > new Date(s.lastExportAt).getTime();
+  }
+  function markEditDirty() {
+    const s = getExportState();
+    s.lastEditAt = new Date().toISOString();
+    lsSetJSON('yp.exportState', s);
+    notifyExportStateChanged();
+  }
+  function markExported() {
+    const s = getExportState();
+    s.lastExportAt = new Date().toISOString();
+    lsSetJSON('yp.exportState', s);
+    notifyExportStateChanged();
+  }
+  function notifyExportStateChanged() {
+    if (typeof TranslationUI !== 'undefined' && TranslationUI.refreshExportStatus) {
+      TranslationUI.refreshExportStatus();
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -730,7 +774,9 @@
   function commitNoteValue() {
     if (!state.noteLoadedFor) return;
     const text = $('note-textarea').value.trim();
+    const prev = getNote(state.noteLoadedFor.group, state.noteLoadedFor.title);
     setNote(state.noteLoadedFor.group, state.noteLoadedFor.title, text);
+    if (text !== prev) markEditDirty();
     $('notes-tab-btn').classList.toggle('has-note', !!text);
     $('note-toggle').classList.toggle('has-note', !!text);
     refreshNodeList();
@@ -743,6 +789,7 @@
     const text = $('note-textarea').value.trim();
     if (text !== getNote(state.noteLoadedFor.group, state.noteLoadedFor.title)) {
       setNote(state.noteLoadedFor.group, state.noteLoadedFor.title, text);
+      markEditDirty();
     }
   }
 
@@ -1475,6 +1522,13 @@
             $('note-toggle').classList.toggle('has-note', !!text);
           }
         },
+        // Export-state tracking. translation-ui.js calls markEditDirty after
+        // an inline translation edit and markExported after a successful
+        // Import or Export. ui.js renders the dirty indicator in the topbar.
+        markEditDirty,
+        markExported,
+        getExportState,
+        isExportDirty,
       });
     }
 
@@ -1498,8 +1552,18 @@
     });
   }
 
-  // Last-resort save of any unsaved note when the user closes the tab.
-  window.addEventListener('beforeunload', flushPendingNote);
+  // Last-resort save of any unsaved note when the user closes the tab, plus
+  // a "you have unexported edits" prompt if the dirty flag is set.
+  window.addEventListener('beforeunload', (e) => {
+    flushPendingNote();
+    if (isExportDirty()) {
+      e.preventDefault();
+      // Modern browsers ignore the message but still show a generic prompt
+      // when returnValue is non-empty.
+      e.returnValue = '';
+      return '';
+    }
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // §17 Bootstrap
