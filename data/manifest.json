@@ -1,11 +1,12 @@
 {
-    "generatedAt":  "2026-04-30T00:41:06.5440965+08:00",
+    "generatedAt":  "2026-04-30T03:43:40.4508075+08:00",
     "scripts":  [
                     {
                         "name":  "yarn_工廠_支線對話",
                         "locales":  {
                                         "en-US":  "yarn_工廠_支線對話（240419）(en-US).json",
                                         "es-ES":  "yarn_工廠_支線對話（240419）(es-ES).json",
+                                        "fr-FR":  "yarn_工廠_支線對話（240419）(fr-FR).json",
                                         "it-IT":  "yarn_工廠_支線對話（240419）(it-IT).json",
                                         "ja-JP":  "yarn_工廠_支線對話（240419）(ja-JP).json",
                                         "ru-RU":  "yarn_工廠_支線對話（240419）(ru-RU).json",
@@ -18,6 +19,7 @@
                         "locales":  {
                                         "en-US":  "yarn_工廠_第二日_阿凡動畫（231204）(en-US).json",
                                         "es-ES":  "yarn_工廠_第二日_阿凡動畫（231204）(es-ES).json",
+                                        "fr-FR":  "yarn_工廠_第二日_阿凡動畫（231204）(fr-FR).json",
                                         "it-IT":  "yarn_工廠_第二日_阿凡動畫（231204）(it-IT).json",
                                         "ja-JP":  "yarn_工廠_第二日_阿凡動畫（231122）(ja-JP).json",
                                         "ru-RU":  "yarn_工廠_第二日_阿凡動畫（231204）(ru-RU).json",
@@ -30,6 +32,7 @@
                         "locales":  {
                                         "en-US":  "yarn_工廠_第三日（231226）(en-US).json",
                                         "es-ES":  "yarn_工廠_第三日（231226）(es-ES).json",
+                                        "fr-FR":  "yarn_工廠_第三日（231226）(fr-FR).json",
                                         "it-IT":  "yarn_工廠_第三日（231226）(it-IT).json",
                                         "ja-JP":  "yarn_工廠_第三日（231215）(ja-JP).json",
                                         "ru-RU":  "yarn_工廠_第三日（231226）(ru-RU).json",
@@ -42,6 +45,7 @@
                         "locales":  {
                                         "en-US":  "yarn_工廠_第四日（240208）(en-US).json",
                                         "es-ES":  "yarn_工廠_第四日（240208）(es-ES).json",
+                                        "fr-FR":  "yarn_工廠_第四日（240208）(fr-FR).json",
                                         "it-IT":  "yarn_工廠_第四日（240208）(it-IT).json",
                                         "ja-JP":  "yarn_工廠_第四日（240208）(ja-JP).json",
                                         "ru-RU":  "yarn_工廠_第四日（240208）(ru-RU).json",
@@ -54,6 +58,7 @@
                         "locales":  {
                                         "en-US":  "yarn_工廠_路人對話（240419）(en-US).json",
                                         "es-ES":  "yarn_工廠_路人對話（240419）(es-ES).json",
+                                        "fr-FR":  "yarn_工廠_路人對話（240419）(fr-FR).json",
                                         "it-IT":  "yarn_工廠_路人對話（240419）(it-IT).json",
                                         "ja-JP":  "yarn_工廠_路人對話（240419）(ja-JP).json",
                                         "ru-RU":  "yarn_工廠_路人對話（240419）(ru-RU).json",
@@ -66,6 +71,7 @@
                         "locales":  {
                                         "en-US":  "yarn_主角家(en-US).json",
                                         "es-ES":  "yarn_主角家(es-ES).json",
+                                        "fr-FR":  "yarn_主角家(fr-FR).json",
                                         "it-IT":  "yarn_主角家(it-IT).json",
                                         "ja-JP":  "yarn_主角家(ja-JP).json",
                                         "ru-RU":  "yarn_主角家(ru-RU).json",
@@ -78,6 +84,7 @@
                         "locales":  {
                                         "en-US":  "yarn_主角家+街景_第二日（231204）(en-US).json",
                                         "es-ES":  "yarn_主角家+街景_第二日（231204）(es-ES).json",
+                                        "fr-FR":  "yarn_主角家+街景_第二日（231204）(fr-FR).json",
                                         "it-IT":  "yarn_主角家+街景_第二日（231204）(it-IT).json",
                                         "ja-JP":  "yarn_主角家+街景_第二日（231114）(ja-JP).json",
                                         "ru-RU":  "yarn_主角家+街景_第二日（231204）(ru-RU).json",
@@ -90,6 +97,7 @@
                         "locales":  {
                                         "en-US":  "yarn_主角家+街景_第三日（231226）(en-US).json",
                                         "es-ES":  "yarn_主角家+街景_第三日（231226）(es-ES).json",
+                                        "fr-FR":  "yarn_主角家+街景_第三日（231226）(fr-FR).json",
                                         "it-IT":  "yarn_主角家+街景_第三日（231226）(it-IT).json",
                                         "ja-JP":  "yarn_主角家+街景_第三日（231215）(ja-JP).json",
                                         "ru-RU":  "yarn_主角家+街景_第三日（231226）(ru-RU).json",
@@ -102,6 +110,7 @@
                         "locales":  {
                                         "en-US":  "yarn_主角家+街景_第四日（240208）(en-US).json",
                                         "es-ES":  "yarn_主角家+街景_第四日（240208）(es-ES).json",
+                                        "fr-FR":  "yarn_主角家+街景_第四日（240208）(fr-FR).json",
                                         "it-IT":  "yarn_主角家+街景_第四日（240208）(it-IT).json",
                                         "ja-JP":  "yarn_主角家+街景_第四日（240208）(ja-JP).json",
                                         "ru-RU":  "yarn_主角家+街景_第四日（240208）(ru-RU).json",
@@ -114,6 +123,7 @@
                         "locales":  {
                                         "en-US":  "yarn_回家_第二日_阿凡動畫 （231204）(en-US).json",
                                         "es-ES":  "yarn_回家_第二日_阿凡動畫 （231204）(es-ES).json",
+                                        "fr-FR":  "yarn_回家_第二日_阿凡動畫 （231204）(fr-FR).json",
                                         "it-IT":  "yarn_回家_第二日_阿凡動畫 （231204）(it-IT).json",
                                         "ja-JP":  "yarn_回家_第二日_阿凡動畫 （231215）(ja-JP).json",
                                         "ru-RU":  "yarn_回家_第二日_阿凡動畫 （231204）(ru-RU).json",
@@ -126,6 +136,7 @@
                         "locales":  {
                                         "en-US":  "yarn_回家_第三日（231226）(en-US).json",
                                         "es-ES":  "yarn_回家_第三日（231226）(es-ES).json",
+                                        "fr-FR":  "yarn_回家_第三日（231226）(fr-FR).json",
                                         "it-IT":  "yarn_回家_第三日（231226）(it-IT).json",
                                         "ja-JP":  "yarn_回家_第三日（231215）(ja-JP).json",
                                         "ru-RU":  "yarn_回家_第三日（231226）(ru-RU).json",
@@ -138,6 +149,7 @@
                         "locales":  {
                                         "en-US":  "yarn_回家_第四日（240208）(en-US).json",
                                         "es-ES":  "yarn_回家_第四日（240208）(es-ES).json",
+                                        "fr-FR":  "yarn_回家_第四日（240208）(fr-FR).json",
                                         "it-IT":  "yarn_回家_第四日（240208）(it-IT).json",
                                         "ja-JP":  "yarn_回家_第四日（240208）(ja-JP).json",
                                         "ru-RU":  "yarn_回家_第四日（240208）(ru-RU).json",
@@ -150,6 +162,7 @@
                         "locales":  {
                                         "en-US":  "yarn_後日談（240419）(en-US).json",
                                         "es-ES":  "yarn_後日談（240419）(es-ES).json",
+                                        "fr-FR":  "yarn_後日談（240419）(fr-FR).json",
                                         "it-IT":  "yarn_後日談（240419）(it-IT).json",
                                         "ja-JP":  "yarn_後日談（240419）(ja-JP).json",
                                         "ru-RU":  "yarn_後日談（240419）(ru-RU).json",
@@ -162,6 +175,7 @@
                         "locales":  {
                                         "en-US":  "yarn_教學關(en-US).json",
                                         "es-ES":  "yarn_教學關(es-ES).json",
+                                        "fr-FR":  "yarn_教學關(fr-FR).json",
                                         "it-IT":  "yarn_教學關(it-IT).json",
                                         "ja-JP":  "yarn_教學關(ja-JP).json",
                                         "ru-RU":  "yarn_教學關(ru-RU).json",
@@ -174,6 +188,7 @@
                         "locales":  {
                                         "en-US":  "yarn_異常後日談 (en-US).json",
                                         "es-ES":  "yarn_異常後日談 (es-ES).json",
+                                        "fr-FR":  "yarn_異常後日談 (fr-FR).json",
                                         "it-IT":  "yarn_異常後日談 (it-IT).json",
                                         "ja-JP":  "yarn_異常後日談 (ja-JP).json",
                                         "ru-RU":  "yarn_異常後日談 (ru-RU).json",
@@ -186,6 +201,7 @@
                         "locales":  {
                                         "en-US":  "yarn_第五日（240419）(en-US).json",
                                         "es-ES":  "yarn_第五日（240419）(es-ES).json",
+                                        "fr-FR":  "yarn_第五日（240419）(fr-FR).json",
                                         "it-IT":  "yarn_第五日（240419）(it-IT).json",
                                         "ja-JP":  "yarn_第五日（240419）(ja-JP).json",
                                         "ru-RU":  "yarn_第五日（240419）(ru-RU).json",
@@ -198,6 +214,7 @@
                         "locales":  {
                                         "en-US":  "yarn_街景_路人對話（240419）(en-US).json",
                                         "es-ES":  "yarn_街景_路人對話（240419）(es-ES).json",
+                                        "fr-FR":  "yarn_街景_路人對話（240419）(fr-FR).json",
                                         "it-IT":  "yarn_街景_路人對話（240419）(it-IT).json",
                                         "ja-JP":  "yarn_街景_路人對話（240419）(ja-JP).json",
                                         "ru-RU":  "yarn_街景_路人對話（240419）(ru-RU).json",
@@ -210,6 +227,7 @@
                         "locales":  {
                                         "en-US":  "yarn_街景對話(en-US).json",
                                         "es-ES":  "yarn_街景對話(es-ES).json",
+                                        "fr-FR":  "yarn_街景對話(fr-FR).json",
                                         "it-IT":  "yarn_街景對話(it-IT).json",
                                         "ja-JP":  "yarn_街景對話(ja-JP).json",
                                         "ru-RU":  "yarn_街景對話(ru-RU).json",
@@ -222,6 +240,7 @@
                         "locales":  {
                                         "en-US":  "工廠第一日-阿凡動畫（231121）(en-US).json",
                                         "es-ES":  "工廠第一日-阿凡動畫（231121）(es-ES).json",
+                                        "fr-FR":  "工廠第一日-阿凡動畫（231121）(fr-FR).json",
                                         "it-IT":  "工廠第一日-阿凡動畫（231121）(it-IT).json",
                                         "ja-JP":  "工廠第一日-阿凡動畫（231114）(ja-JP).json",
                                         "ru-RU":  "工廠第一日-阿凡動畫（231121）(ru-RU).json",

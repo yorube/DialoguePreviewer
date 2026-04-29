@@ -172,6 +172,43 @@ foreach ($dir in $SourceDir) {
     }
 }
 
+# --- 新語言 stub 生成 ---
+# 對於還沒開工翻譯的目標語言（例如 fr-FR 第一次加），預覽站需要 dropdown 內出現它，
+# 不然譯者連選都選不到。這裡對每個 script 補上缺少的 locale stub：
+#   - 用 en-US 的 JSON 直接複製一份，命名成 `xxx(target).json`
+#   - guids.json 也指向同一個 en-US guid（UID 才會跟 LocKit CSV 對得上）
+# 之後譯者開 Edit Mode 自己翻或上傳填好的 CSV 都會蓋掉這個 stub 的英文顯示。
+# 真實 JSON 之後從 v2 Batch Process 產出來放回 Settings/Localization/En-It/，下次跑
+# 這個 script 時 first-wins 會選真實 JSON，stub 自動退場。
+$ensureTargetLocales = @('en-US', 'es-ES', 'it-IT', 'ja-JP', 'ru-RU', 'fr-FR', 'zh-CN', 'zh-TW')
+
+$stubCount = 0
+foreach ($canon in @($scripts.Keys)) {
+    $sc = $scripts[$canon]
+    $enUSName = $sc.locales['en-US']
+    if (-not $enUSName) { continue }                              # 沒英文 source 就沒辦法 stub
+    $enUSPath = Join-Path $OutDir $enUSName
+
+    foreach ($loc in $ensureTargetLocales) {
+        if ($sc.locales.ContainsKey($loc)) { continue }           # 已有真實 JSON
+        $stubName = $enUSName -replace '\(en-US\)', "($loc)"
+        if ($stubName -eq $enUSName) { continue }                 # 安全網：替換沒成功就跳過
+        $stubPath = Join-Path $OutDir $stubName
+        if (Test-Path $stubPath) { continue }                     # 已經被別的 source 寫進來
+        if (-not (Test-Path $enUSPath)) { continue }
+        Copy-Item -Path $enUSPath -Destination $stubPath -Force
+        $sc.locales[$loc] = $stubName
+        if ($guids.Contains($enUSName)) {
+            # 用 en-US source 的 guid（UID = guid + nodeIdx + lineIdx，要對齊 LocKit CSV）
+            $guids[$stubName] = $guids[$enUSName]
+        }
+        $stubCount++
+    }
+}
+if ($stubCount -gt 0) {
+    Write-Host ("產出 stub 數: " + $stubCount + " (新語言可預覽 + 站內編輯)") -ForegroundColor DarkYellow
+}
+
 # 組 manifest
 $manifest = @{
     generatedAt = (Get-Date).ToString('o')
