@@ -529,11 +529,7 @@
     const proj = activeProject();
     if (!proj) return;
 
-    // Stable index based on JSON's natural order (survives sort + filter).
-    const allTitles = [...proj.nodes.keys()];
-    const idxByTitle = new Map(allTitles.map((title, i) => [title, i + 1]));
-
-    let titles = allTitles;
+    let titles = [...proj.nodes.keys()];
     if (state.nodeFilter) {
       const f = state.nodeFilter.toLowerCase();
       titles = titles.filter(x => x.toLowerCase().includes(f));
@@ -544,17 +540,19 @@
       return ma !== mb ? ma - mb : a.localeCompare(b);
     });
 
-    const padWidth = String(allTitles.length).length;
+    // Number = position in the visible list, so it always reads 1, 2, 3 …
+    // regardless of sort order or active filter.
+    const padWidth = String(titles.length).length;
     const noted = state.activeGroup ? notedTitlesIn(state.activeGroup) : new Set();
     const frag = document.createDocumentFragment();
-    for (const title of titles) {
+    titles.forEach((title, i) => {
       const li = document.createElement('li');
       const hasNote = noted.has(title);
       if (hasNote) li.classList.add('has-note');
 
       const num = document.createElement('span');
       num.className = 'node-num';
-      num.textContent = String(idxByTitle.get(title)).padStart(padWidth, '0');
+      num.textContent = String(i + 1).padStart(padWidth, '0');
 
       const ttl = document.createElement('span');
       ttl.className = 'node-title';
@@ -577,7 +575,7 @@
       li.title = title;
       li.onclick = () => startAt(title);
       frag.appendChild(li);
-    }
+    });
     list.appendChild(frag);
     $('node-count').textContent = `(${titles.length})`;
   }
