@@ -32,6 +32,20 @@
   const LOCALE_RE = /^(.+)\(([^()]+)\)\.json$/i;
   const NOTE_DEBOUNCE_MS = 700;
 
+  // Per-speaker name colors. Hash(name) → index → color, so the same speaker
+  // always gets the same hue. Palette skips pink/blue stereotypes and the
+  // hues already used by gender badges (teal / amber).
+  const SPEAKER_COLORS = [
+    '#ffd479',  // warm yellow (default fallback)
+    '#9ad9a4',  // sage green
+    '#c8a6ff',  // lavender
+    '#ffaa66',  // orange
+    '#6dd0ff',  // sky
+    '#d4ff7a',  // chartreuse
+    '#a6b8ff',  // periwinkle
+    '#ffc7a3',  // peach
+  ];
+
   const $ = (id) => document.getElementById(id);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -225,11 +239,28 @@
   // §6  Markup helpers
   // ─────────────────────────────────────────────────────────────────────────
 
+  // djb2-style string hash → small non-negative int. Used to deterministically
+  // map a speaker name to a color slot.
+  function hashStr(s) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) {
+      h = ((h << 5) + h) + s.charCodeAt(i);
+      h |= 0;
+    }
+    return Math.abs(h);
+  }
+  function colorForSpeaker(rawName) {
+    if (!rawName) return null;
+    return SPEAKER_COLORS[hashStr(rawName) % SPEAKER_COLORS.length];
+  }
+
   // Render a text node that may carry MBU/TMP markup. Pulls a leading [M]/[F]
   // marker (added by formatSpeaker) into a styled chip; pushes the rest as
-  // plain text.
+  // plain text. Tints the whole span by hashed-color of the bare character
+  // name so multi-speaker scenes are easy to scan.
   function renderSpeakerInto(span, speaker) {
     const m = speaker.match(/^\[([MF])\]\s+(.*)$/);
+    const displayName = m ? m[2] : speaker;
     if (m) {
       const badge = document.createElement('span');
       badge.className = 'gender-badge gender-' + m[1].toLowerCase();
@@ -240,6 +271,13 @@
     } else {
       span.textContent = speaker;
     }
+    // Strip narrator/communicator decorators before hashing — same actor
+    // should keep the same color whether the line is on the comm or in person.
+    const bareName = displayName
+      .replace(/^📱\s*/, '')
+      .replace(/^\?\?\?（(.+?)）.*$/, '$1');
+    const color = colorForSpeaker(bareName);
+    if (color) span.style.color = color;
   }
 
   function formatSpeaker(line) {
