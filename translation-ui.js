@@ -262,13 +262,17 @@
         }
 
         const ts = getOrCreateState(activeLocale);
-        if (ts.stats().baselineCount > 0 || ts.stats().overrideCount > 0) {
+        const before = ts.stats();
+        if (before.baselineCount > 0 || before.overrideCount > 0) {
+            const overrideWarn = before.overrideCount > 0
+                ? `\n\n⚠️ 你目前有 ${before.overrideCount} 條站內編輯（含尚未匯入新檔的修改），上傳會把它們「全部清掉」，整個 ${activeLocale} 以新檔為準。\n\n如果你不想丟掉站內編輯：先按 [💾 下載譯文] 把目前狀態存下來，再上傳。`
+                : '';
             const proceed = confirm(
-                `將要覆寫當前 ${activeLocale} 的譯文資料：\n\n` +
-                `  上傳基準: ${ts.stats().baselineCount} 條\n` +
-                `  站內編輯: ${ts.stats().overrideCount} 條\n\n` +
-                `站內編輯會被「保留」，但若新檔對同一 UID 有不同譯文，站內編輯仍然優先（你可以之後按「🔄 重設站內編輯」放掉）。\n\n` +
-                `要繼續覆寫嗎？`);
+                `將要把 ${activeLocale} 的譯文「整個替換」成上傳檔的內容：\n\n` +
+                `  目前基準: ${before.baselineCount} 條\n` +
+                `  目前站內編輯: ${before.overrideCount} 條` +
+                overrideWarn +
+                `\n\n要繼續覆寫嗎？`);
             if (!proceed) return;
         }
 
@@ -377,10 +381,13 @@
         const editBtn = document.createElement('button');
         editBtn.className = 't-edit-btn';
         editBtn.textContent = '✏️';
-        editBtn.title = '編輯這句譯文';
+        editBtn.title = '編輯這句譯文（預填當前顯示的文本）';
         editBtn.addEventListener('click', (ev) => {
             ev.stopPropagation();
-            openInlineEditor(rowEl, info.uid, info.text === originalText ? '' : info.text);
+            // 預填當前畫面上顯示的文本：
+            //   - 已翻譯 → 預填譯文
+            //   - 還沒翻 → 預填英文原文（譯者直接覆蓋翻譯，不用對著空白起手）
+            openInlineEditor(rowEl, info.uid, info.text);
         });
         rowEl.appendChild(editBtn);
     }

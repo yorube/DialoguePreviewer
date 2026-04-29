@@ -114,7 +114,8 @@
 
         /**
          * 一次性把整個 baseline 換掉（譯者上傳新檔）。
-         * 預設保留 overrides；caller 可選擇 clearOverrides=true 強制重設。
+         * 預設語意：上傳代表譯者最新進度，**會清掉站內編輯 (overrides)**，整個語言以新檔為準。
+         * 若刻意想保留站內編輯，傳 options.preserveOverrides = true。
          * source 帶過來會被存著，給「下載同格式」用。
          */
         function replaceBaseline(translations, sourceMeta, options) {
@@ -122,7 +123,7 @@
             state.baseline = new Map(translations);
             state.sourceMeta = sourceMeta || null;
             if (options.source) state.source = options.source;
-            if (options.clearOverrides) {
+            if (!options.preserveOverrides) {
                 state.overrides = new Map();
             }
             persist();
