@@ -125,6 +125,61 @@
       'tr.export.ago.minutes': '{n}m',
       'tr.export.ago.hours': '{n}h',
       'tr.export.ago.days': '{n}d',
+      'help.btn.tip': 'Help',
+      'help.title': 'How to use this previewer',
+      'help.body': `
+<h3>Preview a script</h3>
+<ul>
+  <li>Pick the <b>Script</b> in the sidebar and the <b>Text language</b> in the top bar.</li>
+  <li>Click any <b>node</b> in the sidebar to start it. Press <kbd>Space</kbd> / <kbd>Enter</kbd> or click <b>▼ Continue</b> to advance.</li>
+  <li>When choices appear, click one or press <kbd>1</kbd>–<kbd>9</kbd>.</li>
+  <li><b>⟳ Replay this node</b> restarts from the top. <b>← Step back</b> rewinds one line. The <b>↶</b> on each line jumps the runtime back to that point.</li>
+</ul>
+
+<h3>Edit translations (✏️ Edit Mode)</h3>
+<ul>
+  <li>Pick a <b>target language</b> (not en-US) in the top bar, then toggle <b>✏️ Translation Edit Mode</b> above the dialogue.</li>
+  <li>The dialogue panel switches to a <b>flat editing view</b> showing every line, every option, and every <code>&lt;&lt;if&gt;&gt;</code> branch of the current node.</li>
+  <li>Click <b>✏️</b> on any line / option, type the translation, save with <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> (or click ✓). Cancel with <kbd>Esc</kbd>.</li>
+  <li>Toggle Edit Mode off to return to the runtime preview — your edits show up there too.</li>
+</ul>
+
+<h3>Import / Export</h3>
+<ul>
+  <li><b>📥 Import translation file</b>: load a translator-filled <code>.csv</code> / <code>.xlsx</code>. Fully replaces the current language with the file's contents (and restores any <i>Notes</i> column inside it).</li>
+  <li><b>💾 Export translation file</b>: download a <code>.csv</code> in Unity v2 LocKit format (Type / Gender / CharacterName / en-US / locale / ID / FileName / NodeTitle / Notes), filled with everything you've imported + edited inline.</li>
+  <li><b>🔁 Reset this language</b>: clear imported baseline + inline edits for this language. Cannot be undone.</li>
+  <li>The status pill in the top bar shows <b>✓ Saved Nm ago</b> when everything is exported, or <b>⚠️ Unexported edits</b> when you have local changes that aren't in any file yet. Closing the tab while dirty triggers a browser confirmation.</li>
+</ul>
+
+<h3>Translator notes (📝)</h3>
+<ul>
+  <li>Each node has a free-form note. Click <b>📝 Note</b> in the dialogue toolbar (or the <b>Notes</b> tab in the source panel) to write one. Nodes with notes show 📝 in the sidebar.</li>
+  <li>Notes save automatically as you type. They're stored in your browser <i>and</i> embedded in the Notes column of every Export, so they travel across machines / browsers.</li>
+</ul>
+
+<h3>Variables</h3>
+<ul>
+  <li>The right-hand panel shows live variable values. Edit any of them to override what the runtime sees on the next replay — useful for testing branch-specific dialogue.</li>
+  <li><b>🔄 Reset overrides</b> appears when overrides exist; click to revert.</li>
+</ul>
+
+<h3>What is saved</h3>
+<ul>
+  <li>Saved in your browser only: imported baseline, inline edits, notes, splitter widths, source font size, UI language.</li>
+  <li>Not saved across reloads: which script / node / language was active, Edit Mode toggle, variable overrides.</li>
+  <li>If you might switch browsers, switch computers, or use Safari (which clears site data after 7 days of no visits), <b>Export your work</b> regularly — the file carries your translations <i>and</i> your notes.</li>
+</ul>
+
+<h3>Keyboard shortcuts</h3>
+<ul>
+  <li><kbd>Space</kbd> / <kbd>Enter</kbd> — advance one line</li>
+  <li><kbd>1</kbd>–<kbd>9</kbd> — pick the corresponding option</li>
+  <li><kbd>R</kbd> — replay current node from the top</li>
+  <li><kbd>←</kbd> / <kbd>Backspace</kbd> — step back one line</li>
+  <li><kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> — save inline edit; <kbd>Esc</kbd> — cancel</li>
+</ul>
+`,
     },
     zh: {
       'topbar.script': '劇本',
@@ -198,6 +253,61 @@
       'tr.export.ago.minutes': '{n} 分鐘',
       'tr.export.ago.hours': '{n} 小時',
       'tr.export.ago.days': '{n} 天',
+      'help.btn.tip': '說明',
+      'help.title': '使用說明',
+      'help.body': `
+<h3>預覽劇本</h3>
+<ul>
+  <li>在 sidebar 選 <b>劇本</b>,在上方選 <b>文本語言</b>。</li>
+  <li>點 sidebar 任一個 <b>節點</b> 開始預覽。按 <kbd>Space</kbd> / <kbd>Enter</kbd> 或點 <b>▼ 繼續</b> 推進對話。</li>
+  <li>出現選項時,直接點或按 <kbd>1</kbd>-<kbd>9</kbd>。</li>
+  <li><b>⟳ 從本節點重看</b> 從頭重來。<b>← 退一行</b> 倒回上一行。每行尾的 <b>↶</b> 可以直接跳回那個位置。</li>
+</ul>
+
+<h3>編輯翻譯(✏️ Edit Mode)</h3>
+<ul>
+  <li>先把 <b>文本語言</b> 切到目標語言(不要選 en-US),再按對話面板上方的 <b>✏️ 翻譯編輯模式</b>。</li>
+  <li>對話區會切到 <b>攤平編輯視圖</b>,把目前 node 的每一行、每個選項、以及所有 <code>&lt;&lt;if&gt;&gt;</code> 分支全部展開。</li>
+  <li>點任何行 / 選項旁的 <b>✏️</b>,輸入翻譯,按 <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>(或點 ✓)儲存。<kbd>Esc</kbd> 取消。</li>
+  <li>關掉 Edit Mode 回到 runtime 預覽 — 你剛剛的編輯會直接套上去。</li>
+</ul>
+
+<h3>匯入 / 匯出</h3>
+<ul>
+  <li><b>📥 匯入翻譯檔</b>:載入譯者填好的 <code>.csv</code> / <code>.xlsx</code>。會「整個替換」當前語言的譯文(順便還原檔案內 Notes 欄的譯者註記)。</li>
+  <li><b>💾 匯出翻譯檔</b>:下載 Unity v2 LocKit 格式的 <code>.csv</code>(Type / Gender / CharacterName / en-US / locale / ID / FileName / NodeTitle / Notes),裡面已經填好你所有匯入過的 + 站內編輯的內容。</li>
+  <li><b>🔁 重置該語言譯文</b>:清掉這個語言的匯入基準 + 站內編輯,無法復原。</li>
+  <li>上方狀態小燈顯示 <b>✓ 已存檔 N 分鐘前</b>(都匯出過了)或 <b>⚠️ 有未匯出的編輯</b>(本機有改但還沒寫入任何檔案)。dirty 狀態下關 tab 會被瀏覽器擋一下確認。</li>
+</ul>
+
+<h3>譯者註記(📝)</h3>
+<ul>
+  <li>每個 node 都可以寫一則自由文字註記。按對話列上的 <b>📝 筆記</b> 或 source 面板的 <b>Notes</b> 分頁切過去寫。有註記的 node 在 sidebar 會顯示 📝。</li>
+  <li>邊打邊存。註記不只存在你的瀏覽器,匯出時也會包進 CSV 的 Notes 欄,可以跟著檔案走到別的電腦 / 瀏覽器。</li>
+</ul>
+
+<h3>變數</h3>
+<ul>
+  <li>右側面板顯示 runtime 變數即時值。改任一格會覆寫,下次 Replay 時 runtime 會用這個新值 — 方便測條件分支對話。</li>
+  <li>有覆寫值時會出現 <b>🔄 重置覆寫</b>,點下去全部回到原值。</li>
+</ul>
+
+<h3>什麼會被存</h3>
+<ul>
+  <li>會留在瀏覽器:匯入過的譯文基準、站內編輯、註記、splitter 寬度、字級、UI 語言。</li>
+  <li>不會跨重整:當前選的劇本 / node / 語言、Edit Mode 開關、變數覆寫。</li>
+  <li>會換瀏覽器、換電腦、或用 Safari(7 天沒回來會被清)的人,<b>請定期匯出</b> — 檔案裡同時包含譯文跟註記,搬到哪都帶得走。</li>
+</ul>
+
+<h3>鍵盤快捷鍵</h3>
+<ul>
+  <li><kbd>Space</kbd> / <kbd>Enter</kbd> — 推進一行</li>
+  <li><kbd>1</kbd>-<kbd>9</kbd> — 選對應的選項</li>
+  <li><kbd>R</kbd> — 從本節點重新開始</li>
+  <li><kbd>←</kbd> / <kbd>Backspace</kbd> — 退一行</li>
+  <li><kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> — 儲存編輯;<kbd>Esc</kbd> — 取消</li>
+</ul>
+`,
     },
   };
 
@@ -223,6 +333,11 @@
     document.documentElement.lang = currentLang === 'zh' ? 'zh-Hant' : 'en';
     for (const el of document.querySelectorAll('[data-i18n]')) {
       el.textContent = t(el.dataset.i18n);
+    }
+    for (const el of document.querySelectorAll('[data-i18n-html]')) {
+      // Strings under data-i18n-html come from this file's hardcoded lang
+      // tables, so innerHTML is safe here (no untrusted input flows in).
+      el.innerHTML = t(el.dataset.i18nHtml);
     }
     for (const el of document.querySelectorAll('[data-i18n-placeholder]')) {
       el.placeholder = t(el.dataset.i18nPlaceholder);
@@ -1420,6 +1535,19 @@
       e.preventDefault();
       bumpSourceFontSize(e.deltaY < 0 ? +1 : -1);
     }, { passive: false });
+
+    // Help (?) modal — open on button click, close on backdrop / × / Esc.
+    const helpOverlay = $('help-overlay');
+    const openHelp = () => { helpOverlay.hidden = false; };
+    const closeHelp = () => { helpOverlay.hidden = true; };
+    $('help-btn').addEventListener('click', openHelp);
+    $('help-close').addEventListener('click', closeHelp);
+    helpOverlay.addEventListener('click', e => {
+      if (e.target === helpOverlay) closeHelp();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !helpOverlay.hidden) closeHelp();
+    });
 
     // Drag-drop fallback for loading per-locale .json directly (dev / no manifest).
     document.body.addEventListener('dragover', e => {
