@@ -218,7 +218,7 @@
             uploadLabel.dataset.i18nTitle = 'tr.upload.tip';
             const uploadText = document.createElement('span');
             uploadText.dataset.i18n = 'tr.upload';
-            uploadText.textContent = '📥 Upload translation file';
+            uploadText.textContent = '📥 Import translation file';
             const uploadInput = document.createElement('input');
             uploadInput.type = 'file';
             uploadInput.id = 't-upload-input';
@@ -236,7 +236,7 @@
             dlBtn.type = 'button';
             dlBtn.dataset.i18n = 'tr.download';
             dlBtn.dataset.i18nTitle = 'tr.download.tip';
-            dlBtn.textContent = '💾 Download translation file';
+            dlBtn.textContent = '💾 Export translation file';
             dlBtn.addEventListener('click', onDownloadLocFile);
             ops.appendChild(dlBtn);
 
