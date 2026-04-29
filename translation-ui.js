@@ -345,6 +345,12 @@
             withTranslation: parsed.stats.withTranslation,
         }, { source: parsed.source }); // 預設清掉 overrides（完全替代語意）
 
+        // Restore translator notes if the imported file carries a Notes column.
+        const notesRestored = restoreNotesFromSource(parsed.source);
+        if (notesRestored) {
+            console.log(`[translation-ui] restored ${notesRestored} translator notes from import`);
+        }
+
         if (parsed.warnings.length) {
             console.warn('[translation-ui] upload warnings:', parsed.warnings);
         }
@@ -537,7 +543,12 @@
         // Otherwise (inline-edits-only) we synthesize a CSV from the en-US project
         // AST so they can still download their progress.
         let source = ts ? ts.getSource() : null;
-        if (!source) {
+        if (source) {
+            // Add FileName / NodeTitle / Notes columns so translator notes
+            // travel with the export. No-op when the source already has them
+            // and notes are empty.
+            source = augmentSourceForExport(source);
+        } else {
             source = buildSyntheticSource(activeLocale);
             if (!source) { alert(t('tr.alert.noBaseline')); return; }
         }
@@ -554,16 +565,19 @@
         }
     }
 
-    // Build the v2 LocKit 6-column CSV (Type, Gender, CharacterName, en-US,
-    // {locale}, ID) by re-running YarnConverter.buildSO on every loaded en-US
-    // project — same code path Unity v2 uses, so the file is import-ready.
-    // Used when the translator edited inline without uploading a baseline.
+    // Build the v2 LocKit-style CSV (Type, Gender, CharacterName, en-US,
+    // {locale}, ID, FileName, NodeTitle, Notes) by re-running
+    // YarnConverter.buildSO on every loaded en-US project — same code path
+    // Unity v2 uses, so the file is import-ready. The trailing FileName /
+    // NodeTitle / Notes columns let translator notes round-trip across
+    // browsers and machines (Unity's parser locates columns by header name
+    // and ignores unknown extras).
     function buildSyntheticSource(targetLocale) {
         if (!STATE.hooks || !STATE.hooks.getAllGroups || !STATE.hooks.getEntry) return null;
         if (!STATE.guids) return null;
         if (typeof YarnConverter === 'undefined') return null;
 
-        const headers = ['Type', 'Gender', 'CharacterName', 'en-US', targetLocale, 'ID'];
+        const headers = ['Type', 'Gender', 'CharacterName', 'en-US', targetLocale, 'ID', 'FileName', 'NodeTitle', 'Notes'];
         const rows = [];
         const charCtx = {
             characterKeys: STATE.characterKeys || {},
@@ -571,6 +585,7 @@
             locale: 'en-US',
         };
         const genderMap = STATE.speakerGender || {};
+        const getNote = STATE.hooks.getNote || (() => '');
 
         for (const group of STATE.hooks.getAllGroups()) {
             const enEntry = STATE.hooks.getEntry(group, 'en-US');
@@ -586,6 +601,8 @@
                 continue;
             }
             for (const node of so) {
+                const noteText = getNote(group, node.title) || '';
+                let firstRow = true;
                 for (const line of node.textLines) {
                     if (line.category !== 'Dialogue' && line.category !== 'Option') continue;
                     if (!line.dialogue) continue;
@@ -596,7 +613,11 @@
                         line.dialogue,
                         '',
                         line.uid,
+                        enEntry.filename,
+                        node.title,
+                        firstRow ? noteText : '',
                     ]);
+                    firstRow = false;
                 }
             }
         }
@@ -611,6 +632,155 @@
             localeCol: 4,
             csvHasBom: true,
         };
+    }
+
+    // Augment an uploaded source structure (whatever shape the user gave us)
+    // with FileName / NodeTitle / Notes columns so notes round-trip even when
+    // the original file didn't carry them. No-op when the original already
+    // has every column we'd add.
+    function augmentSourceForExport(source) {
+        if (!source || !STATE.hooks || !STATE.hooks.getNote) return source;
+        const out = {
+            format:    source.format,
+            fileName:  source.fileName,
+            headers:   source.headers.slice(),
+            rows:      source.rows.map(r => r.slice()),
+            idCol:     source.idCol,
+            localeCol: source.localeCol,
+            csvHasBom: source.csvHasBom,
+        };
+
+        const headerIdx = (name) => {
+            const target = name.toLowerCase();
+            for (let i = 0; i < out.headers.length; i++) {
+                if (String(out.headers[i] || '').toLowerCase() === target) return i;
+            }
+            return -1;
+        };
+
+        const ensureCol = (name) => {
+            let idx = headerIdx(name);
+            if (idx !== -1) return idx;
+            idx = out.headers.length;
+            out.headers.push(name);
+            out.rows.forEach(r => r.push(''));
+            return idx;
+        };
+
+        // Need NodeTitle to know which row maps to which node; derive from UID
+        // when the user's source didn't include the column.
+        const fileCol  = ensureCol('FileName');
+        const nodeCol  = ensureCol('NodeTitle');
+        const notesCol = ensureCol('Notes');
+
+        // Reverse map: guid → {filename, group, project}
+        const guidLookup = {};
+        if (STATE.guids && STATE.hooks.getAllGroups && STATE.hooks.getEntry) {
+            for (const group of STATE.hooks.getAllGroups()) {
+                const en = STATE.hooks.getEntry(group, 'en-US');
+                if (!en) continue;
+                const g = STATE.guids[en.filename];
+                if (g) guidLookup[g] = { filename: en.filename, group, project: en.project };
+            }
+        }
+
+        // First pass: ensure every row has FileName + NodeTitle if we can derive them.
+        const seenNodeFirstRow = new Map(); // group||title → rowIdx of first row for that node
+        for (let i = 0; i < out.rows.length; i++) {
+            const row = out.rows[i];
+            const uid = (row[out.idCol] || '').toString().trim();
+            const m = uid.match(/^(.+)-(\d+)-\d+$/);
+            if (!m) continue;
+            const meta = guidLookup[m[1]];
+            if (!meta) continue;
+            const nodeIndex = parseInt(m[2], 10);
+            const nodeTitle = meta.project?.rawNodes?.[nodeIndex]?.title;
+            if (!nodeTitle) continue;
+            if (!row[fileCol]) row[fileCol] = meta.filename;
+            if (!row[nodeCol]) row[nodeCol] = nodeTitle;
+            const key = meta.group + '\x00' + nodeTitle;
+            if (!seenNodeFirstRow.has(key)) {
+                seenNodeFirstRow.set(key, { rowIdx: i, group: meta.group, title: nodeTitle });
+            }
+        }
+
+        // Second pass: drop the note onto the first row of each node (only if
+        // the cell isn't already populated by the user).
+        for (const { rowIdx, group, title } of seenNodeFirstRow.values()) {
+            if (out.rows[rowIdx][notesCol]) continue;
+            const note = STATE.hooks.getNote(group, title) || '';
+            if (note) out.rows[rowIdx][notesCol] = note;
+        }
+
+        return out;
+    }
+
+    // Walk an imported source's rows looking for a Notes column; restore each
+    // non-empty cell into yp.notes via the host's setNote hook.
+    function restoreNotesFromSource(source) {
+        if (!source || !source.headers || !source.rows) return 0;
+        if (!STATE.hooks || !STATE.hooks.setNote) return 0;
+
+        const headerIdx = (name) => {
+            const target = name.toLowerCase();
+            for (let i = 0; i < source.headers.length; i++) {
+                if (String(source.headers[i] || '').toLowerCase() === target) return i;
+            }
+            return -1;
+        };
+        const notesCol = headerIdx('Notes');
+        if (notesCol === -1) return 0;
+        const fileCol = headerIdx('FileName');
+        const nodeCol = headerIdx('NodeTitle');
+
+        // For finding group when only FileName is available.
+        const filenameToGroup = {};
+        if (STATE.hooks.getAllGroups && STATE.hooks.getEntry) {
+            for (const group of STATE.hooks.getAllGroups()) {
+                const en = STATE.hooks.getEntry(group, 'en-US');
+                if (en) filenameToGroup[en.filename] = group;
+            }
+        }
+        const guidLookup = {};
+        if (STATE.guids) {
+            for (const [fn, g] of Object.entries(STATE.guids)) {
+                guidLookup[g] = { filename: fn, group: filenameToGroup[fn] };
+            }
+        }
+        const idCol = source.idCol;
+
+        let restored = 0;
+        for (const row of source.rows) {
+            const noteText = (row[notesCol] || '').toString();
+            if (!noteText) continue;
+
+            // Resolve (group, nodeTitle) for this row.
+            let group = null;
+            let nodeTitle = nodeCol !== -1 ? (row[nodeCol] || '').toString().trim() : '';
+            if (fileCol !== -1) {
+                const fn = (row[fileCol] || '').toString().trim();
+                if (fn && filenameToGroup[fn]) group = filenameToGroup[fn];
+            }
+            if ((!group || !nodeTitle) && idCol != null) {
+                const uid = (row[idCol] || '').toString().trim();
+                const m = uid.match(/^(.+)-(\d+)-\d+$/);
+                if (m) {
+                    const meta = guidLookup[m[1]];
+                    if (meta) {
+                        if (!group) group = meta.group;
+                        if (!nodeTitle && filenameToGroup[meta.filename]) {
+                            const en = STATE.hooks.getEntry(filenameToGroup[meta.filename], 'en-US');
+                            const idx = parseInt(m[2], 10);
+                            nodeTitle = en?.project?.rawNodes?.[idx]?.title || '';
+                        }
+                    }
+                }
+            }
+            if (!group || !nodeTitle) continue;
+            STATE.hooks.setNote(group, nodeTitle, noteText);
+            restored++;
+        }
+        return restored;
     }
 
     function downloadBlob(blob, filename) {

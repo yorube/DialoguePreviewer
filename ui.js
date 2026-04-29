@@ -1466,6 +1466,17 @@
         // transcript rows + pending choices. Toggling Edit Mode or saving an
         // inline edit no longer rewinds the dialogue.
         requestRedraw: redrawTranslationsInPlace,
+        // Notes round-trip hooks (export/import preserves translator notes).
+        getNote: (group, title) => getNote(group, title),
+        setNote: (group, title, text) => {
+          setNote(group, title, text);
+          if (state.activeGroup === group) refreshNodeList();
+          if (state.noteLoadedFor && state.noteLoadedFor.group === group && state.noteLoadedFor.title === title) {
+            $('note-textarea').value = text || '';
+            $('notes-tab-btn').classList.toggle('has-note', !!text);
+            $('note-toggle').classList.toggle('has-note', !!text);
+          }
+        },
       });
     }
 
