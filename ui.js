@@ -966,14 +966,19 @@
     document.querySelectorAll('.pending-action').forEach(el => el.remove());
   }
 
-  // Refresh translation text + Edit Mode decorations on every already-rendered
-  // row (lines in the transcript and pending choice options) without resetting
-  // the runtime or transcript. Called on Edit Mode toggle, inline edit confirm,
-  // and locale upload.
+  // Refresh translation visuals + swap between runtime preview and flat edit view.
+  // Called on Edit Mode toggle, inline edit confirm, locale upload, and node change.
+  // - When Edit Mode is ON: hide transcript, render the current node fully expanded
+  //   (every line, every option, every if-branch) in the flat edit view.
+  // - When Edit Mode is OFF: hide flat view, runtime preview comes back unchanged.
+  // Existing transcript rows are also refreshed in place so edits made in flat view
+  // appear when the user switches back.
   function redrawTranslationsInPlace() {
     if (typeof TranslationUI === 'undefined' || !TranslationUI.lookupLine) return;
-    const tEl = $('transcript');
+    const editMode = !!(TranslationUI.isActive && TranslationUI.isActive());
+    document.body.classList.toggle('t-edit-mode', editMode);
 
+    const tEl = $('transcript');
     const refresh = (rowEl, textSelector) => {
       const uid = rowEl.dataset.tUid;
       const original = rowEl.dataset.tOriginal;
@@ -983,7 +988,6 @@
       if (textEl && typeof YarnParser !== 'undefined') {
         textEl.innerHTML = YarnParser.markupToSafeHtml(info.text);
       }
-      // Strip prior Edit Mode decoration before re-applying.
       rowEl.classList.remove('t-line', 't-untranslated', 't-overridden');
       const oldBtn = rowEl.querySelector(':scope > .t-edit-btn');
       if (oldBtn) oldBtn.remove();
@@ -993,9 +997,165 @@
         TranslationUI.decorateLine(rowEl, info, original);
       }
     };
-
     tEl.querySelectorAll('.row-line[data-t-uid]').forEach(row => refresh(row, '.text'));
     tEl.querySelectorAll('.row-choice[data-t-uid]').forEach(row => refresh(row, '.choice-text'));
+
+    if (editMode) renderFlatEditView();
+  }
+
+  // Lazy-create the flat edit view container as a sibling of #transcript.
+  function getFlatViewEl() {
+    let el = document.getElementById('flat-edit-view');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'flat-edit-view';
+    el.className = 'flat-edit-view';
+    const tEl = $('transcript');
+    tEl.parentNode.insertBefore(el, tEl.nextSibling);
+    return el;
+  }
+
+  // Render the current node fully expanded for translator editing.
+  function renderFlatEditView() {
+    const view = getFlatViewEl();
+    view.innerHTML = '';
+    const proj = activeProject();
+    if (!proj) return;
+    const title = state.runtime && state.runtime.currentNodeTitle;
+    if (!title) return;
+    const node = proj.nodes.get(title);
+    if (!node) return;
+
+    const header = document.createElement('div');
+    header.className = 'flat-node-title';
+    header.textContent = title;
+    view.appendChild(header);
+
+    renderFlatStatements(view, node.statements, node);
+  }
+
+  // Recursive walker. `nodeCtx` carries nodeIndex for UID computation.
+  function renderFlatStatements(container, statements, nodeCtx) {
+    for (const stmt of statements) {
+      if (stmt.type === 'line') renderFlatLine(container, stmt, nodeCtx);
+      else if (stmt.type === 'choices') renderFlatChoices(container, stmt, nodeCtx);
+      else if (stmt.type === 'if') renderFlatIf(container, stmt, nodeCtx);
+      else renderFlatMeta(container, stmt);
+    }
+  }
+
+  function renderFlatLine(container, stmt, nodeCtx) {
+    const row = document.createElement('div');
+    row.className = 'row row-line flat-row';
+    if (stmt.speaker) {
+      const sp = document.createElement('span');
+      sp.className = 'speaker';
+      renderSpeakerInto(sp, formatSpeaker(stmt));
+      row.appendChild(sp);
+      row.appendChild(document.createTextNode(': '));
+    }
+    const original = stmt.text || '';
+    const uid = uidForFlat(nodeCtx, stmt.srcLine);
+    const info = uid && TranslationUI.lookupLine
+      ? TranslationUI.lookupLine(uid, original)
+      : { text: original, status: 'inactive', uid: null };
+    const tx = document.createElement('span');
+    tx.className = 'text';
+    tx.innerHTML = YarnParser.markupToSafeHtml(info.text);
+    row.appendChild(tx);
+    container.appendChild(row);
+    if (info.uid && TranslationUI.decorateLine) {
+      TranslationUI.decorateLine(row, info, original);
+    }
+  }
+
+  function renderFlatChoices(container, stmt, nodeCtx) {
+    stmt.items.forEach((item, idx) => {
+      const row = document.createElement('div');
+      row.className = 'row row-choice flat-row';
+      const arrow = document.createElement('span');
+      arrow.className = 'choice-num';
+      arrow.textContent = `→ ${idx + 1}.`;
+      row.appendChild(arrow);
+      const original = item.text || '';
+      const uid = uidForFlat(nodeCtx, item.srcLine);
+      const info = uid && TranslationUI.lookupLine
+        ? TranslationUI.lookupLine(uid, original)
+        : { text: original, status: 'inactive', uid: null };
+      const tx = document.createElement('span');
+      tx.className = 'choice-text';
+      tx.innerHTML = YarnParser.markupToSafeHtml(info.text);
+      row.appendChild(tx);
+      if (item.cond) {
+        const c = document.createElement('span');
+        c.className = 'flat-cond';
+        c.textContent = `(${item.cond})`;
+        row.appendChild(c);
+      }
+      container.appendChild(row);
+      if (info.uid && TranslationUI.decorateLine) {
+        TranslationUI.decorateLine(row, info, original);
+      }
+      if (item.body && item.body.length) {
+        const body = document.createElement('div');
+        body.className = 'flat-body';
+        renderFlatStatements(body, item.body, nodeCtx);
+        container.appendChild(body);
+      }
+    });
+  }
+
+  function renderFlatIf(container, stmt, nodeCtx) {
+    const tag = document.createElement('div');
+    tag.className = 'flat-branch';
+    tag.textContent = `«if ${stmt.cond}»`;
+    container.appendChild(tag);
+    const thenBody = document.createElement('div');
+    thenBody.className = 'flat-body';
+    renderFlatStatements(thenBody, stmt.then || [], nodeCtx);
+    container.appendChild(thenBody);
+    if (stmt.else && stmt.else.length) {
+      const elseTag = document.createElement('div');
+      elseTag.className = 'flat-branch';
+      elseTag.textContent = '«else»';
+      container.appendChild(elseTag);
+      const elseBody = document.createElement('div');
+      elseBody.className = 'flat-body';
+      renderFlatStatements(elseBody, stmt.else, nodeCtx);
+      container.appendChild(elseBody);
+    }
+    const endTag = document.createElement('div');
+    endTag.className = 'flat-branch flat-branch-end';
+    endTag.textContent = '«endif»';
+    container.appendChild(endTag);
+  }
+
+  function renderFlatMeta(container, stmt) {
+    const row = document.createElement('div');
+    row.className = 'flat-meta';
+    let label = '';
+    switch (stmt.type) {
+      case 'goto':     label = `→ goto ${stmt.label}`; break;
+      case 'condGoto': label = `→ ${stmt.isElse ? 'elseGoto' : 'condGoto'} ${stmt.label} (${stmt.cond})`; break;
+      case 'label':    row.classList.add('flat-label'); label = `@${stmt.name}`; break;
+      case 'set':      label = `set ${stmt.variable} = ${stmt.expr}`; break;
+      case 'wait':     label = `wait ${stmt.seconds}s`; break;
+      case 'end':      label = '— end —'; break;
+      default:         return;
+    }
+    row.textContent = label;
+    container.appendChild(row);
+  }
+
+  function uidForFlat(nodeCtx, srcLine) {
+    if (srcLine == null) return null;
+    if (!state.activeGroup) return null;
+    const groupMap = state.groups.get(state.activeGroup);
+    if (!groupMap) return null;
+    const enEntry = groupMap.get('en-US');
+    if (!enEntry) return null;
+    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return null;
+    return TranslationUI.getUidFor(enEntry.filename, nodeCtx.nodeIndex, srcLine);
   }
 
   // Render the action area (continue / choice buttons) inline at the end of
@@ -1192,6 +1352,10 @@
     appendCurrent();
     renderActions();
     pushSnapshot();
+    // If Edit Mode is on, refresh the flat view so it follows the active node.
+    if (typeof TranslationUI !== 'undefined' && TranslationUI.isActive && TranslationUI.isActive()) {
+      redrawTranslationsInPlace();
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

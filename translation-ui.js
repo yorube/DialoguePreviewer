@@ -131,6 +131,46 @@
         .row-choice .choice-btn { flex: 1 1 auto; }
         .row-choice .t-inline-editor { flex-basis: 100%; margin-left: 0; }
 
+        /* Flat edit view — entire node expanded. Hidden by default; shown only
+           when body.t-edit-mode is on (set by ui.js). Transcript is hidden then. */
+        .flat-edit-view { display: none; padding: 8px 12px; overflow: auto; flex: 1; min-height: 0; }
+        body.t-edit-mode #transcript { display: none !important; }
+        body.t-edit-mode .flat-edit-view { display: block; }
+        .flat-node-title {
+            font-size: 13px;
+            font-weight: 600;
+            opacity: 0.7;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .flat-edit-view .row-line.flat-row,
+        .flat-edit-view .row-choice.flat-row { margin: 4px 0; padding: 2px 0; }
+        .flat-edit-view .row-choice.flat-row { background: rgba(120, 180, 255, 0.04); border-left: 2px solid rgba(120, 180, 255, 0.4); padding-left: 6px; }
+        .flat-edit-view .row-choice .choice-num { color: #88c8ff; font-weight: 600; margin-right: 4px; }
+        .flat-cond { opacity: 0.55; font-size: 11px; font-family: ui-monospace, monospace; margin-left: 6px; }
+        .flat-branch {
+            font-family: ui-monospace, "Cascadia Code", monospace;
+            font-size: 11px;
+            color: #c8a878;
+            margin: 6px 0 2px;
+            opacity: 0.85;
+        }
+        .flat-branch-end { opacity: 0.5; }
+        .flat-meta {
+            font-family: ui-monospace, "Cascadia Code", monospace;
+            font-size: 11px;
+            color: var(--fg-dim, #888);
+            opacity: 0.6;
+            margin: 2px 0;
+        }
+        .flat-label { color: #88e088; opacity: 0.8; }
+        .flat-body { padding-left: 16px; border-left: 1px dashed rgba(255,255,255,0.08); margin-left: 4px; }
+        /* In flat view, ✏️ is the primary action — keep it visible without hover. */
+        .flat-edit-view .t-edit-btn { opacity: 0.7; }
+        .flat-edit-view .row-line:hover .t-edit-btn,
+        .flat-edit-view .row-choice:hover .t-edit-btn { opacity: 1; }
+
         .t-inline-editor {
             display: flex;
             gap: 4px;
