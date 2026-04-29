@@ -246,7 +246,7 @@
     if (!line.speaker) return '';
     let s = line.speaker;
     if (line.isAnonymous) s = `???（${s}）`;
-    if (line.isCommunicator) s = `☎ ${s}`;
+    if (line.isCommunicator) s = `📱 ${s}`;
     const badge = genderBadgeFor(line.speaker);
     if (badge) s = `[${badge}] ${s}`;
     return s;
