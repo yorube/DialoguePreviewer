@@ -57,7 +57,6 @@
       'topbar.script': 'Script',
       'topbar.locale': 'Text language',
       'topbar.uiLang': 'Interface language',
-      'btn.loadJson': '📂 Load .json',
       'btn.replayNode': '⟳ Replay this node',
       'btn.stepBack': '← Step back',
       'btn.continue': '▼ Continue (Space)',
@@ -69,8 +68,6 @@
       'panel.notes': 'Notes',
       'note.placeholder': 'Add a translator note for this node…',
       'input.filter': 'Filter…',
-      'hint.drop': 'Drop per-locale .json files into the window, or click "Load .json" above.',
-      'hint.keys': 'Keys: Space/Enter to continue, 1-9 to pick option.',
       'status.loading': 'Loading {file}…',
       'status.loaded': 'Loaded: {n} nodes ({ms}ms)',
       'status.loadedWithErrors': 'Loaded: {n} nodes ({ms}ms) — {err} parse errors (see F12)',
@@ -133,7 +130,6 @@
       'topbar.script': '劇本',
       'topbar.locale': '文本語言',
       'topbar.uiLang': '介面語言',
-      'btn.loadJson': '📂 載入 .json',
       'btn.replayNode': '⟳ 從本節點重看',
       'btn.stepBack': '← 退一行',
       'btn.continue': '▼ 繼續 (Space)',
@@ -145,8 +141,6 @@
       'panel.notes': '筆記',
       'note.placeholder': '在這裡為此節點加翻譯筆記…',
       'input.filter': '篩選…',
-      'hint.drop': '把 .json per-locale 檔拖進視窗，或按上方「載入 .json」。',
-      'hint.keys': '鍵盤：空白／Enter 繼續、數字鍵 1-9 選選項。',
       'status.loading': '載入 {file}…',
       'status.loaded': '載入完成：{n} 個節點 ({ms}ms)',
       'status.loadedWithErrors': '載入完成：{n} 個節點 ({ms}ms)，但有 {err} 個節點解析失敗（F12 看細節）',
@@ -1427,8 +1421,7 @@
       bumpSourceFontSize(e.deltaY < 0 ? +1 : -1);
     }, { passive: false });
 
-    // File input + drag-drop.
-    $('file-input').addEventListener('change', e => ingestFiles(e.target.files));
+    // Drag-drop fallback for loading per-locale .json directly (dev / no manifest).
     document.body.addEventListener('dragover', e => {
       e.preventDefault(); document.body.classList.add('dragover');
     });

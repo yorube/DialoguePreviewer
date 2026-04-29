@@ -76,8 +76,6 @@ body.dragover { outline: 3px dashed var(--accent); outline-offset: -8px; }
 .ui-lang-ctrl { margin-left: auto; }
 .ui-lang-ctrl select { min-width: 110px; }
 .ctrl button:hover { background: var(--choice-bg); }
-.file-ctrl { cursor: pointer; padding: 4px 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; }
-.file-ctrl:hover { background: var(--choice-bg); }
 .node-tag {
   margin-left: auto;
   padding: 4px 10px;
@@ -650,33 +648,13 @@ body.dragging-splitter * { user-select: none; }
   border-color: var(--accent);
 }
 
-.hint {
-  position: fixed;
-  bottom: 8px;
-  right: 12px;
-  font-size: 11px;
-  color: var(--fg-dim);
-  background: var(--bg2);
-  padding: 6px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  pointer-events: none;
-  text-align: right;
-}
-.hint code {
-  background: var(--bg3);
-  padding: 1px 4px;
-  border-radius: 2px;
-  font-size: 10px;
-}
-
 /* === Mobile / narrow viewport ============================================ */
 @media (max-width: 900px) {
   body { font-size: 14px; }
   .topbar { padding: 8px 10px; gap: 6px; }
   .brand { font-size: 13px; }
   .ctrl { font-size: 12px; }
-  .ctrl select, .ctrl button, .file-ctrl {
+  .ctrl select, .ctrl button {
     padding: 6px 8px;
     font-size: 12px;
     min-width: 0;
@@ -720,7 +698,6 @@ body.dragging-splitter * { user-select: none; }
   }
   .var-row { padding: 4px 4px; font-size: 11px; }
   .var-edit-text, .var-edit-number { width: 70px; }
-  .hint { display: none; }
 }
 
 /* === Very narrow phones (< 480px): tighten further ======================= */

@@ -20,9 +20,6 @@
       <option value="zh">繁體中文</option>
     </select>
   </label>
-  <label class="ctrl file-ctrl" title="Manually load .json (fallback)"><span data-i18n="btn.loadJson">📂 Load .json</span>
-    <input type="file" id="file-input" accept=".json" multiple hidden>
-  </label>
   <span id="status" class="status"></span>
 </header>
 
@@ -93,11 +90,6 @@
     <div id="vars"></div>
   </aside>
 </main>
-
-<div class="hint">
-  <span data-i18n="hint.drop">Drop per-locale .json files into the window, or click "Load .json" above.</span><br>
-  <span data-i18n="hint.keys">Keys: Space/Enter to continue, 1-9 to pick option.</span>
-</div>
 
 <script src="parser.js"></script>
 <script src="runtime.js"></script>
