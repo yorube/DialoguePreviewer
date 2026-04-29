@@ -25,11 +25,13 @@
         // baseline = upload 過來的 UID→text，read-only 概念
         // overrides = 站內 inline edit 的 UID→text，覆蓋 baseline
         // sourceMeta = upload 時的檔名 / 時間 / 統計
+        // source     = 原檔結構（headers + rows + idCol/localeCol/format/csvHasBom），給「下載同格式」用
         const state = {
             locale,
             baseline: new Map(),        // Map<uid, text>
             overrides: new Map(),       // Map<uid, text>
             sourceMeta: null,           // {fileName, importedAt, totalRows, withTranslation}
+            source: null,               // {format, fileName, headers, rows, idCol, localeCol, csvHasBom}
         };
 
         load();
@@ -37,18 +39,27 @@
         // ----- Persistence -----
 
         function persist() {
+            // 先嘗試帶 source 的 full payload；超過 quota 時退而求其次只存譯文，不存 source
+            const fullPayload = {
+                v: STORAGE_VERSION,
+                locale: state.locale,
+                baseline: Array.from(state.baseline.entries()),
+                overrides: Array.from(state.overrides.entries()),
+                sourceMeta: state.sourceMeta,
+                source: state.source, // 整份 rows 一起存（quota 緊張時 fallback）
+            };
             try {
-                const payload = {
-                    v: STORAGE_VERSION,
-                    locale: state.locale,
-                    baseline: Array.from(state.baseline.entries()),
-                    overrides: Array.from(state.overrides.entries()),
-                    sourceMeta: state.sourceMeta,
-                };
-                localStorage.setItem(storageKey, JSON.stringify(payload));
+                localStorage.setItem(storageKey, JSON.stringify(fullPayload));
+                return;
             } catch (e) {
-                // localStorage 滿了或 quota 不夠時不要炸掉 UI
-                console.warn('[TranslationState] persist failed:', e);
+                // 通常是 QuotaExceededError；移除 source 後再試
+                console.warn('[TranslationState] full persist failed, dropping source:', e.message);
+            }
+            try {
+                const slim = Object.assign({}, fullPayload, { source: null });
+                localStorage.setItem(storageKey, JSON.stringify(slim));
+            } catch (e2) {
+                console.warn('[TranslationState] slim persist also failed:', e2.message);
             }
         }
 
@@ -61,6 +72,7 @@
                 if (Array.isArray(obj.baseline)) state.baseline = new Map(obj.baseline);
                 if (Array.isArray(obj.overrides)) state.overrides = new Map(obj.overrides);
                 if (obj.sourceMeta) state.sourceMeta = obj.sourceMeta;
+                if (obj.source) state.source = obj.source;
             } catch (e) {
                 console.warn('[TranslationState] load failed:', e);
             }
@@ -103,16 +115,20 @@
         /**
          * 一次性把整個 baseline 換掉（譯者上傳新檔）。
          * 預設保留 overrides；caller 可選擇 clearOverrides=true 強制重設。
+         * source 帶過來會被存著，給「下載同格式」用。
          */
         function replaceBaseline(translations, sourceMeta, options) {
             options = options || {};
             state.baseline = new Map(translations);
             state.sourceMeta = sourceMeta || null;
+            if (options.source) state.source = options.source;
             if (options.clearOverrides) {
                 state.overrides = new Map();
             }
             persist();
         }
+
+        function getSource() { return state.source; }
 
         /**
          * 不動 baseline、清掉 overrides（譯者後悔站內改的，回到上傳的譯文）。
@@ -171,6 +187,7 @@
             reset,
             buildMergedMap,
             stats,
+            getSource,
         };
     }
 

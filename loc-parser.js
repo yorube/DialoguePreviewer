@@ -21,7 +21,22 @@
      * 通用入口：自動依副檔名選擇 parser。
      * @param {File} file - 從 <input type="file"> 拿到的 File 物件
      * @param {string} expectedLocale - e.g. 'fr-FR' / 'ru-RU'。用於選翻譯欄。
-     * @returns {Promise<{translations: Map<string, string>, stats: object, warnings: string[]}>}
+     * @returns {Promise<ParsedResult>}
+     *
+     * ParsedResult = {
+     *   translations: Map<UID, text>,
+     *   stats: { sourceFile, locale, totalRows, withTranslation, missingUid, dupUids, headerColumns, format, csvHasBom },
+     *   warnings: string[],
+     *   source: {                       // 給「下載同格式譯文」用
+     *     format: 'csv' | 'xlsx',
+     *     fileName: string,
+     *     headers: string[],
+     *     rows: string[][],             // 不含 header；對齊 headers 的長度
+     *     idCol: number,
+     *     localeCol: number,
+     *     csvHasBom: boolean,           // 只在 csv 時有意義
+     *   }
+     * }
      */
     async function parseFile(file, expectedLocale) {
         if (!file) throw new Error('file is required');
@@ -44,14 +59,18 @@
         opts = opts || {};
         if (typeof text !== 'string') throw new Error('text must be string');
 
-        // 去 BOM
-        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        // 去 BOM；記住有沒有，下載時要寫回去
+        let hadBom = false;
+        if (text.charCodeAt(0) === 0xFEFF) {
+            text = text.slice(1);
+            hadBom = true;
+        }
 
         const rows = parseCsvText(text);
         if (rows.length === 0) {
             throw new Error('CSV 是空的');
         }
-        return rowsToTranslations(rows, expectedLocale, opts);
+        return rowsToTranslations(rows, expectedLocale, Object.assign({}, opts, { format: 'csv', csvHasBom: hadBom }));
     }
 
     /**
@@ -76,7 +95,7 @@
         if (rows.length === 0) throw new Error('xlsx 第一張工作表是空的');
         // sheet_to_json 已經回 string[][]，但 cells 可能是 number/boolean，統一成 string
         const normalized = rows.map(r => r.map(c => c == null ? '' : String(c)));
-        return rowsToTranslations(normalized, expectedLocale, opts);
+        return rowsToTranslations(normalized, expectedLocale, Object.assign({}, opts, { format: 'xlsx', csvHasBom: false }));
     }
 
     /**
@@ -94,15 +113,28 @@
         let missingUid = 0;
         const sourceFile = opts.fileName || '(unknown)';
 
+        // 把所有 data rows 保留下來，方便之後 round-trip 寫回同格式檔
+        const dataRows = [];
+
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
             if (!row || row.length === 0) continue;
             // 全空行跳過（xlsx 有時會夾空 row）
             if (row.every(c => !c || String(c).trim() === '')) continue;
 
+            // 標準化：對齊 header 長度（短的補空、長的保留）
+            const normalized = row.length === headerRow.length
+                ? row.slice()
+                : (() => {
+                    const r = row.slice(0, headerRow.length);
+                    while (r.length < headerRow.length) r.push('');
+                    return r;
+                })();
+            dataRows.push(normalized);
+
             totalRows++;
-            const uid  = (row[cols.idCol]      || '').toString().trim();
-            const text = (row[cols.localeCol]  || '').toString();
+            const uid  = (normalized[cols.idCol]     || '').toString().trim();
+            const text = (normalized[cols.localeCol] || '').toString();
 
             if (!uid) {
                 missingUid++;
@@ -135,8 +167,19 @@
                 missingUid,
                 dupUids,
                 headerColumns: headerRow,
+                format: opts.format || 'csv',
+                csvHasBom: !!opts.csvHasBom,
             },
             warnings,
+            source: {
+                format:    opts.format || 'csv',
+                fileName:  sourceFile,
+                headers:   headerRow,
+                rows:      dataRows,
+                idCol:     cols.idCol,
+                localeCol: cols.localeCol,
+                csvHasBom: !!opts.csvHasBom,
+            },
         };
     }
 

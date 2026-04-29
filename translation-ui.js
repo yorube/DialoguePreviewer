@@ -208,8 +208,14 @@
                 <input type="file" id="t-upload-input" accept=".csv,.xlsx,.xls">
             </label>
             <button id="t-clear-overrides" title="清掉站內編輯，回到上傳的版本">🔄 重設站內編輯</button>
-            <button id="t-download-current" title="只下載當前 script 的單檔 .json">⬇️ 下載當前</button>
-            <button id="t-download-zip" class="primary" title="下載所有 script 的目標語言 .json (zip)">📦 下載 zip</button>
+            <button id="t-download-loc" class="primary" title="下載成跟你上傳同格式的譯文檔（含站內編輯）">💾 下載譯文</button>
+            <details class="t-advanced" style="margin-left:8px;">
+                <summary style="cursor:pointer; opacity:0.7; font-size:11px;">進階</summary>
+                <div style="display:flex; gap:6px; padding-top:4px; flex-wrap:wrap;">
+                    <button id="t-download-current" title="只下載當前 script 的目標語言 .json (Unity 用)">⬇️ Unity JSON (當前)</button>
+                    <button id="t-download-zip" title="下載所有 script 的目標語言 .json zip (Unity 用)">📦 Unity JSON (zip)</button>
+                </div>
+            </details>
             <span class="stats" id="t-stats">尚未載入翻譯</span>
         `;
         dialogueToolbar.parentNode.insertBefore(tt, dialogueToolbar.nextSibling);
@@ -217,6 +223,7 @@
         // Wire events
         document.getElementById('t-upload-input').addEventListener('change', onUpload);
         document.getElementById('t-clear-overrides').addEventListener('click', onClearOverrides);
+        document.getElementById('t-download-loc').addEventListener('click', onDownloadLocFile);
         document.getElementById('t-download-current').addEventListener('click', onDownloadCurrent);
         document.getElementById('t-download-zip').addEventListener('click', onDownloadZip);
     }
@@ -285,7 +292,7 @@
             importedAt: new Date().toISOString(),
             totalRows: parsed.stats.totalRows,
             withTranslation: parsed.stats.withTranslation,
-        });
+        }, { source: parsed.source });
 
         const warningSummary = parsed.warnings.length
             ? `\n\n⚠️ 警告：\n  ${parsed.warnings.slice(0, 5).join('\n  ')}`
@@ -421,7 +428,40 @@
         });
     }
 
-    // ----- Download -----
+    // ----- Download: 同格式譯文檔（給譯者用）-----
+
+    function onDownloadLocFile() {
+        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+        if (!activeLocale) { alert('請先選擇目標語言'); return; }
+        const ts = STATE.states.get(activeLocale);
+        if (!ts) {
+            alert('還沒上傳任何譯文檔。請先上傳，編輯完再下載。');
+            return;
+        }
+        const source = ts.getSource();
+        if (!source) {
+            alert(
+                '找不到當初上傳檔案的結構（可能是上次上傳後 localStorage 容量太大被丟掉）。\n' +
+                '請重新上傳一次原始 .csv / .xlsx，再下載。');
+            return;
+        }
+        if (typeof LocWriter === 'undefined') {
+            alert('LocWriter 未載入'); return;
+        }
+        try {
+            const merged = ts.buildMergedMap();
+            const result = LocWriter.writeLocFile(source, merged, {});
+            const blob = result.payload instanceof Blob
+                ? result.payload
+                : new Blob([result.payload], { type: result.mime });
+            downloadBlob(blob, result.filename);
+        } catch (e) {
+            console.error('[translation-ui] download loc failed:', e);
+            alert(`產出譯文檔失敗：${e.message}`);
+        }
+    }
+
+    // ----- Download (Unity-side JSON) -----
 
     async function onDownloadCurrent() {
         const activeGroup  = STATE.hooks && STATE.hooks.getActiveGroup && STATE.hooks.getActiveGroup();
