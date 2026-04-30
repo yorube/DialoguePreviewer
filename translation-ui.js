@@ -984,9 +984,34 @@
         return `${guid}-${nodeIndex}-${srcLine}`;
     }
 
+    // Cross-locale lookup used by the translation-comparison modal in ui.js.
+    // Unlike lookupLine() — which only looks at the current activeLocale —
+    // this reaches into TranslationState[locale] for any locale, so the
+    // comparison reflects imported files + inline edits per language.
+    function lookupForLocale(locale, uid, fallbackText) {
+        if (!locale || !uid) return { text: fallbackText, status: 'inactive' };
+        if (isSourceLocale(locale)) return { text: fallbackText, status: 'inactive' };
+        const ts = STATE.states.get(locale) || (
+            typeof TranslationState !== 'undefined'
+                ? (() => {
+                    const fresh = TranslationState.createState(locale);
+                    STATE.states.set(locale, fresh);
+                    return fresh;
+                  })()
+                : null
+        );
+        if (!ts) return { text: fallbackText, status: 'untranslated' };
+        const text = ts.get(uid);
+        if (text == null || text === '') {
+            return { text: fallbackText, status: 'untranslated' };
+        }
+        return { text, status: ts.source(uid) };
+    }
+
     global.TranslationUI = {
         install,
         lookupLine,
+        lookupForLocale,
         decorateLine,
         getUidFor,
         notifyLocaleChange: () => updateStats(),

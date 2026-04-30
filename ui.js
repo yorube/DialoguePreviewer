@@ -26,7 +26,7 @@
   // §1  Constants & version
   // ─────────────────────────────────────────────────────────────────────────
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const SNAPSHOT_LIMIT = 500;
   const SRC_FONT_MIN = 10, SRC_FONT_MAX = 22, SRC_FONT_DEFAULT = 14;
   const LOCALE_RE = /^(.+)\(([^()]+)\)\.json$/i;
@@ -61,7 +61,26 @@
       'btn.stepBack': '← Step back',
       'btn.continue': '▼ Continue (Space)',
       'btn.openNote': '📝 Note',
+      'btn.compareLangs': '📊 Compare languages',
+      'btn.compareLangs.tip': 'Show side-by-side translations of the current node across all available languages.',
       'btn.resetOverrides': '🔄 Reset overrides ({n})',
+      'compare.title': 'Translation comparison',
+      'compare.tip': 'Each row is one translatable line / option in the current node. Cells show the displayed text per language (imported file + inline edits applied).',
+      'compare.col.line': 'Line',
+      'compare.col.kind': 'Kind',
+      'compare.col.speaker': 'Speaker',
+      'compare.kind.line': 'Dialogue',
+      'compare.kind.option': '→ Option',
+      'compare.empty': '— (no text)',
+      'compare.missing': '— missing —',
+      'compare.loading': 'Loading translations across {n} languages…',
+      'compare.noNode': 'Pick a node to compare.',
+      'compare.loadFailed': 'Failed to load {locale}: {msg}',
+      'compare.legend.source': 'Source',
+      'compare.legend.translated': 'Translated',
+      'compare.legend.untranslated': 'Untranslated (falls back to source)',
+      'compare.legend.override': 'Inline edit',
+      'compare.openInEdit': 'Edit in this language',
       'sidebar.nodes': 'Nodes',
       'panel.vars': 'Variables',
       'panel.source': 'Source',
@@ -214,7 +233,26 @@
       'btn.stepBack': '← 退一行',
       'btn.continue': '▼ 繼續 (Space)',
       'btn.openNote': '📝 筆記',
+      'btn.compareLangs': '📊 對照各語言',
+      'btn.compareLangs.tip': '把當前節點的對話與選項列出，比對所有可用語言的翻譯。',
       'btn.resetOverrides': '🔄 重置覆寫 ({n})',
+      'compare.title': '翻譯對照表',
+      'compare.tip': '每一列是當前節點裡一條可翻譯的對話/選項。每格顯示該語言實際會被看到的文字（已套用匯入檔 + 站內編輯）。',
+      'compare.col.line': '行號',
+      'compare.col.kind': '類型',
+      'compare.col.speaker': '說話者',
+      'compare.kind.line': '對話',
+      'compare.kind.option': '→ 選項',
+      'compare.empty': '— (空白) —',
+      'compare.missing': '— 缺 —',
+      'compare.loading': '載入 {n} 種語言中…',
+      'compare.noNode': '請先選一個節點。',
+      'compare.loadFailed': '載入 {locale} 失敗：{msg}',
+      'compare.legend.source': '原文',
+      'compare.legend.translated': '已翻譯',
+      'compare.legend.untranslated': '未翻譯（回退原文）',
+      'compare.legend.override': '站內編輯',
+      'compare.openInEdit': '切到此語言並進入 Edit Mode',
       'sidebar.nodes': '節點清單',
       'panel.vars': '變數狀態',
       'panel.source': '原始文本',
@@ -1407,6 +1445,289 @@
     return TranslationUI.getUidFor(enEntry.filename, nodeCtx.nodeIndex, srcLine);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // §12b Translation comparison modal
+  // ─────────────────────────────────────────────────────────────────────────
+  // Side-by-side comparison of every translatable line/option in the current
+  // node across all bundled locales for the active script. Reads the parsed
+  // project for each locale (lazy-loaded on demand) and overlays
+  // TranslationUI overrides per locale so imported files + inline edits show
+  // up exactly as a translator would see them.
+
+  // Walk a parsed node's statements depth-first and yield every translatable
+  // entry (Dialogue line / option) in display order, preserving srcLine so we
+  // can match the same entry across locales.
+  function flattenComparableEntries(node) {
+    const out = [];
+    if (!node || !node.statements) return out;
+    function walk(stmts) {
+      for (const s of stmts) {
+        if (!s) continue;
+        if (s.type === 'line') {
+          out.push({
+            kind: 'line',
+            srcLine: s.srcLine,
+            speaker: formatSpeaker(s),
+            rawSpeaker: s.speaker || '',
+            text: s.text || '',
+          });
+        } else if (s.type === 'choices') {
+          for (const item of (s.items || [])) {
+            out.push({
+              kind: 'option',
+              srcLine: item.srcLine,
+              speaker: '',
+              rawSpeaker: '',
+              text: item.text || '',
+              cond: item.cond || null,
+            });
+            if (item.body && item.body.length) walk(item.body);
+          }
+        } else if (s.type === 'if') {
+          walk(s.then || []);
+          if (s.else) walk(s.else);
+        }
+      }
+    }
+    walk(node.statements);
+    return out;
+  }
+
+  // Build a Map<srcLine, { text, kind, speaker }> for one locale's same-titled
+  // node, used to align rows by srcLine across locales when structure differs
+  // (extra blank lines, comments, etc.).
+  function buildLocaleSrcLineMap(project, nodeTitle) {
+    const map = new Map();
+    if (!project || !nodeTitle) return map;
+    const node = project.nodes && project.nodes.get(nodeTitle);
+    if (!node) return map;
+    for (const e of flattenComparableEntries(node)) {
+      if (e.srcLine != null) map.set(e.srcLine, e);
+    }
+    return map;
+  }
+
+  function isSourceLocaleForCompare(loc) {
+    return loc === 'en-US' || loc === 'zh-TW' || loc === 'unknown';
+  }
+
+  // Open the comparison modal for the current node. Lazy-loads every locale's
+  // project, then renders an HTML table.
+  async function openTranslationCompareModal() {
+    const overlay = $('compare-overlay');
+    const body = $('compare-body');
+    const titleEl = $('compare-node-title');
+    if (!overlay || !body) return;
+
+    const group = state.activeGroup;
+    const nodeTitle = state.runtime && state.runtime.currentNodeTitle;
+    if (!group || !nodeTitle) {
+      body.textContent = t('compare.noNode');
+      titleEl.textContent = '';
+      overlay.hidden = false;
+      return;
+    }
+
+    const localesMap = state.groups.get(group);
+    if (!localesMap) return;
+    const allLocales = [...localesMap.keys()];
+    // Stable column order: en-US first, zh-TW next (other source), then the
+    // remaining locales sorted. Keeps the source side-by-side with translations.
+    const ordered = [];
+    if (localesMap.has('en-US')) ordered.push('en-US');
+    if (localesMap.has('zh-TW')) ordered.push('zh-TW');
+    for (const loc of allLocales.sort()) {
+      if (!ordered.includes(loc)) ordered.push(loc);
+    }
+
+    titleEl.textContent = nodeTitle;
+    body.textContent = t('compare.loading', { n: ordered.length });
+    overlay.hidden = false;
+
+    // Lazy-load every locale in parallel. A failure on one locale is logged
+    // and shown as a per-column error rather than blocking the whole modal.
+    const loadResults = await Promise.all(ordered.map(async (loc) => {
+      try {
+        const project = await ensureLoaded(group, loc);
+        return { locale: loc, project, error: null };
+      } catch (e) {
+        console.error('[compare] load failed', loc, e);
+        return { locale: loc, project: null, error: e.message || String(e) };
+      }
+    }));
+
+    renderCompareTable(body, group, nodeTitle, loadResults);
+  }
+
+  function renderCompareTable(container, group, nodeTitle, loadResults) {
+    container.innerHTML = '';
+
+    // Source = en-US; if missing fall back to first loaded locale.
+    let sourceRes = loadResults.find(r => r.locale === 'en-US' && r.project);
+    if (!sourceRes) sourceRes = loadResults.find(r => r.project);
+    if (!sourceRes) {
+      container.textContent = t('compare.missing');
+      return;
+    }
+
+    const sourceNode = sourceRes.project.nodes.get(nodeTitle);
+    if (!sourceNode) {
+      container.textContent = t('error.nodeNotFound', { title: nodeTitle });
+      return;
+    }
+    const entries = flattenComparableEntries(sourceNode);
+    if (!entries.length) {
+      container.textContent = t('compare.empty');
+      return;
+    }
+
+    // Per-locale srcLine maps for cell lookup.
+    const localeMaps = new Map();
+    for (const r of loadResults) {
+      localeMaps.set(r.locale, r.project ? buildLocaleSrcLineMap(r.project, nodeTitle) : null);
+    }
+
+    // Resolve nodeIndex once for UID computation (en-US is the canonical UID
+    // source — same convention as decorateLine / computeLineUid).
+    const enEntry = state.groups.get(group).get('en-US');
+    const enFilename = enEntry ? enEntry.filename : null;
+    const sourceNodeIndex = sourceNode.nodeIndex;
+
+    // Legend chips above the table.
+    const legend = document.createElement('div');
+    legend.className = 'compare-legend';
+    legend.innerHTML =
+      `<span class="compare-chip compare-chip-source">${t('compare.legend.source')}</span>` +
+      `<span class="compare-chip compare-chip-translated">${t('compare.legend.translated')}</span>` +
+      `<span class="compare-chip compare-chip-override">${t('compare.legend.override')}</span>` +
+      `<span class="compare-chip compare-chip-untranslated">${t('compare.legend.untranslated')}</span>`;
+    container.appendChild(legend);
+
+    const tableWrap = document.createElement('div');
+    tableWrap.className = 'compare-table-wrap';
+
+    const table = document.createElement('table');
+    table.className = 'compare-table';
+
+    // ── Header row ─────────────────────────────────────────────────────────
+    const thead = document.createElement('thead');
+    const trh = document.createElement('tr');
+    const addTh = (label, cls) => {
+      const th = document.createElement('th');
+      if (cls) th.className = cls;
+      th.textContent = label;
+      trh.appendChild(th);
+    };
+    addTh('#', 'compare-col-line');
+    addTh(t('compare.col.kind'), 'compare-col-kind');
+    addTh(t('compare.col.speaker'), 'compare-col-speaker');
+    for (const r of loadResults) {
+      const th = document.createElement('th');
+      th.className = 'compare-col-locale';
+      if (isSourceLocaleForCompare(r.locale)) th.classList.add('compare-col-source');
+      if (r.locale === state.activeLocale) th.classList.add('compare-col-active');
+      th.textContent = r.locale;
+      if (r.error) {
+        th.title = t('compare.loadFailed', { locale: r.locale, msg: r.error });
+        th.classList.add('compare-col-error');
+      }
+      trh.appendChild(th);
+    }
+    thead.appendChild(trh);
+    table.appendChild(thead);
+
+    // ── Body ───────────────────────────────────────────────────────────────
+    const tbody = document.createElement('tbody');
+    for (const entry of entries) {
+      const tr = document.createElement('tr');
+      tr.className = 'compare-row compare-row-' + entry.kind;
+
+      const lineCell = document.createElement('td');
+      lineCell.className = 'compare-cell-line';
+      lineCell.textContent = entry.srcLine != null ? String(entry.srcLine) : '';
+      tr.appendChild(lineCell);
+
+      const kindCell = document.createElement('td');
+      kindCell.className = 'compare-cell-kind';
+      kindCell.textContent = entry.kind === 'option'
+        ? t('compare.kind.option')
+        : t('compare.kind.line');
+      tr.appendChild(kindCell);
+
+      const speakerCell = document.createElement('td');
+      speakerCell.className = 'compare-cell-speaker';
+      if (entry.speaker) {
+        renderSpeakerInto(speakerCell, entry.speaker);
+      }
+      tr.appendChild(speakerCell);
+
+      const uid = (enFilename != null && sourceNodeIndex != null && entry.srcLine != null
+        && typeof TranslationUI !== 'undefined' && TranslationUI.getUidFor)
+        ? TranslationUI.getUidFor(enFilename, sourceNodeIndex, entry.srcLine)
+        : null;
+
+      for (const r of loadResults) {
+        const td = document.createElement('td');
+        td.className = 'compare-cell-text';
+        if (isSourceLocaleForCompare(r.locale)) td.classList.add('compare-cell-source');
+        if (r.locale === state.activeLocale) td.classList.add('compare-cell-active');
+
+        if (r.error) {
+          td.classList.add('compare-cell-error');
+          td.textContent = '!';
+          td.title = r.error;
+          tr.appendChild(td);
+          continue;
+        }
+
+        const localeMap = localeMaps.get(r.locale);
+        const localeEntry = localeMap ? localeMap.get(entry.srcLine) : null;
+        const fallbackText = localeEntry ? localeEntry.text : '';
+
+        // For non-source locales, prefer override/baseline from TranslationState
+        // (so imported files + inline edits show up). For source locales
+        // (en-US, zh-TW) we always show the bundled JSON text.
+        let displayedText = fallbackText;
+        let status = 'inactive';
+        if (!isSourceLocaleForCompare(r.locale) && uid
+            && typeof TranslationUI !== 'undefined' && TranslationUI.lookupForLocale) {
+          const info = TranslationUI.lookupForLocale(r.locale, uid, fallbackText);
+          displayedText = info.text;
+          status = info.status;
+        }
+
+        if (status === 'override') td.classList.add('compare-cell-override');
+        else if (status === 'baseline') td.classList.add('compare-cell-translated');
+        else if (status === 'untranslated' && !isSourceLocaleForCompare(r.locale)) {
+          td.classList.add('compare-cell-untranslated');
+        }
+
+        if (!localeMap && !isSourceLocaleForCompare(r.locale)) {
+          // Project couldn't be loaded for this locale at all.
+          td.classList.add('compare-cell-untranslated');
+          td.textContent = t('compare.missing');
+        } else if (!displayedText) {
+          td.classList.add('compare-cell-empty');
+          td.textContent = t('compare.empty');
+        } else {
+          // Use markupToSafeHtml so TMP/MBU markup renders consistently with
+          // the rest of the previewer (color, italics, etc.).
+          td.innerHTML = YarnParser.markupToSafeHtml(displayedText);
+        }
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    tableWrap.appendChild(table);
+    container.appendChild(tableWrap);
+  }
+
+  function closeCompareModal() {
+    const overlay = $('compare-overlay');
+    if (overlay) overlay.hidden = true;
+  }
+
   // Render the action area (continue / choice buttons) inline at the end of
   // the transcript. Also keeps the source-line highlight in sync.
   function renderActions() {
@@ -1641,6 +1962,24 @@
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !helpOverlay.hidden) closeHelp();
     });
+
+    // Translation comparison modal — open on 📊 button, same close UX as help.
+    const compareOverlay = $('compare-overlay');
+    if (compareOverlay) {
+      $('compare-btn').addEventListener('click', () => {
+        openTranslationCompareModal().catch(err => {
+          console.error('[compare] open failed', err);
+          setStatus(t('status.error', { msg: err.message || String(err), at: 'compare' }));
+        });
+      });
+      $('compare-close').addEventListener('click', closeCompareModal);
+      compareOverlay.addEventListener('click', e => {
+        if (e.target === compareOverlay) closeCompareModal();
+      });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && !compareOverlay.hidden) closeCompareModal();
+      });
+    }
 
     // Drag-drop fallback for loading per-locale .json directly (dev / no manifest).
     document.body.addEventListener('dragover', e => {
