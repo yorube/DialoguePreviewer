@@ -458,8 +458,9 @@
     currentLang = lang;
     try { localStorage.setItem('yp.lang', lang); } catch (e) {}
     applyI18n();
-    // Re-render dynamic strings.
-    if (state.runtime) renderVars();
+    // Re-render dynamic strings (vars panel works in both pre-runtime and
+    // active-runtime states now).
+    renderVars();
     syncResetBtn();
     syncOverrideMarkers();
     const cont = document.querySelector('.continue-btn');
@@ -960,11 +961,26 @@
     }
     refreshNodeList();
     const proj = activeProject();
-    const desired = state.runtime?.currentNodeTitle || 'Start';
-    const startTitle = proj.nodes.has(desired)
-      ? desired
-      : (proj.nodes.has('Start') ? 'Start' : proj.nodes.keys().next().value);
-    if (startTitle) startAt(startTitle);
+    const wasViewing = state.runtime && state.runtime.currentNodeTitle;
+    if (wasViewing && proj.nodes.has(wasViewing)) {
+      // Locale change while mid-dialogue: stay on the current node so the
+      // translator's place isn't lost.
+      startAt(wasViewing);
+    } else {
+      // Fresh script load: don't auto-start a node. Populate the variables
+      // panel from declared defaults so the translator can pre-set
+      // branch-relevant flags before clicking any node.
+      state.runtime = null;
+      state.snapshots = [];
+      $('transcript').innerHTML = '';
+      $('current-node').textContent = '—';
+      const flat = document.getElementById('flat-edit-view');
+      if (flat) flat.innerHTML = '';
+      removePendingActions();
+      updateBackBtn();
+      renderVars();
+      syncActiveNodeInList();
+    }
   }
 
   function refreshNodeList() {
@@ -1223,13 +1239,35 @@
   // §11 Variables panel (with overrides)
   // ─────────────────────────────────────────────────────────────────────────
 
+  // Compute the pre-runtime variable map: declared defaults from the
+  // 變數紀錄 node, overlaid with any user overrides. Used to populate the
+  // panel before any node has been started, so translators can adjust
+  // branch-relevant flags before the runtime ticks the first line.
+  function readPreRuntimeVars() {
+    const proj = activeProject();
+    if (!proj || typeof YarnRuntime === 'undefined' || !YarnRuntime.readDeclaredDefaults) {
+      return Object.fromEntries(state.varOverrides);
+    }
+    const declNode = proj.nodes.get('變數紀錄');
+    const defaults = declNode ? (YarnRuntime.readDeclaredDefaults(declNode.body) || {}) : {};
+    for (const [k, v] of state.varOverrides) defaults[k] = v;
+    return defaults;
+  }
+
   function renderVars() {
     const rt = state.runtime;
     const panel = $('vars');
     panel.innerHTML = '';
-    if (!rt) return;
 
-    const entries = Object.entries(rt.vars).sort((a, b) => a[0].localeCompare(b[0]));
+    // Live runtime vars when a node is playing; declared defaults + the
+    // user's overrides otherwise. Either way the panel is editable.
+    const source = rt ? rt.vars : readPreRuntimeVars();
+    const entries = Object.entries(source).sort((a, b) => a[0].localeCompare(b[0]));
+    if (!entries.length) {
+      syncResetBtn();
+      return;
+    }
+
     for (const [name, value] of entries) {
       const row = document.createElement('div');
       row.className = 'var-row';
@@ -1278,13 +1316,16 @@
 
   // Apply a manual var edit. Persisted in state.varOverrides so the value
   // survives "從 Start 重啟" / replay (re-applied after declared defaults).
+  // Works both pre-runtime (just records the override) and during a run
+  // (also writes through to the live runtime + topmost snapshot).
   function updateVar(name, value) {
-    if (!state.runtime) return;
-    state.runtime.vars[name] = value;
     state.varOverrides.set(name, value);
-    // Sync the topmost snapshot so backLine doesn't undo a manual edit.
-    if (state.snapshots.length) {
-      state.snapshots[state.snapshots.length - 1].rt.vars[name] = value;
+    if (state.runtime) {
+      state.runtime.vars[name] = value;
+      // Sync the topmost snapshot so backLine doesn't undo a manual edit.
+      if (state.snapshots.length) {
+        state.snapshots[state.snapshots.length - 1].rt.vars[name] = value;
+      }
     }
     syncOverrideMarkers();
     syncResetBtn();
@@ -1308,8 +1349,12 @@
         btn.className = 'var-reset-btn';
         btn.addEventListener('click', () => {
           state.varOverrides.clear();
-          const title = state.runtime?.currentNodeTitle;
+          // Mid-dialogue: replay the active node so the cleared overrides
+          // re-evaluate from the first line. Pre-runtime: just re-render
+          // the panel so values fall back to declared defaults.
+          const title = state.runtime && state.runtime.currentNodeTitle;
           if (title) startAt(title);
+          else renderVars();
         });
         panel.appendChild(btn);
       }

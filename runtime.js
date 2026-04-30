@@ -388,5 +388,6 @@
   }
 
   global.YarnRuntime = YarnRuntime;
-  global.YarnRuntime.evalExpr = evalExpr;     // exposed for debugging
+  global.YarnRuntime.evalExpr = evalExpr;                       // exposed for debugging
+  global.YarnRuntime.readDeclaredDefaults = readDeclaredDefaults; // used by the vars panel pre-runtime
 })(typeof window !== 'undefined' ? window : globalThis);
