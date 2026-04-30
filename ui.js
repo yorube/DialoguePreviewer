@@ -26,7 +26,7 @@
   // §1  Constants & version
   // ─────────────────────────────────────────────────────────────────────────
 
-  const VERSION = '1.2.0';
+  const VERSION = '1.3.0';
   const SNAPSHOT_LIMIT = 500;
   const SRC_FONT_MIN = 10, SRC_FONT_MAX = 22, SRC_FONT_DEFAULT = 14;
   const LOCALE_RE = /^(.+)\(([^()]+)\)\.json$/i;
@@ -2252,6 +2252,29 @@
   // §17 Bootstrap
   // ─────────────────────────────────────────────────────────────────────────
 
+  // Top-level page tabs (Dialogue / UI Strings). Body class drives which
+  // page is visible; CSS in ui-strings.js handles UI-strings-specific show
+  // / hide. Persisted across reloads via yp.activePage.
+  function initPageTabs() {
+    const tabs = document.querySelectorAll('.page-tab');
+    if (!tabs.length) return;
+    const setPage = (name) => {
+      tabs.forEach(b => {
+        const on = b.dataset.page === name;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      document.body.classList.toggle('page-ui-strings', name === 'ui-strings');
+      lsSet('yp.activePage', name);
+      if (name === 'ui-strings' && typeof UIStrings !== 'undefined' && UIStrings.show) {
+        UIStrings.show();
+      }
+    };
+    tabs.forEach(b => b.addEventListener('click', () => setPage(b.dataset.page)));
+    const saved = lsGet('yp.activePage', 'dialogue');
+    setPage(saved === 'ui-strings' ? 'ui-strings' : 'dialogue');
+  }
+
   async function bootstrap() {
     window.addEventListener('error', e => {
       console.error('[uncaught]', e.error || e.message);
@@ -2264,6 +2287,10 @@
 
     init();
     applyI18n();
+    if (typeof UIStrings !== 'undefined' && UIStrings.init) {
+      try { UIStrings.init(); } catch (e) { console.error('[ui-strings] init failed', e); }
+    }
+    initPageTabs();
     setStatus(t('status.readingManifest'));
     try {
       await loadSpeakerGenderMap();

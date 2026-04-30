@@ -7,6 +7,12 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<nav class="page-tabs" role="tablist">
+  <button class="page-tab active" data-page="dialogue" type="button" role="tab" aria-selected="true">💬 對話 / Dialogue</button>
+  <button class="page-tab" data-page="ui-strings" type="button" role="tab" aria-selected="false">🧩 UI 字串 / UI Strings</button>
+</nav>
+
+<div id="page-dialogue" class="page page-dialogue">
 <!-- 第一行：設定列（語言選擇 + UI 語言 + brand / status） -->
 <header class="topbar topbar-settings">
   <span class="brand">MBU Yarn Preview</span>
@@ -103,6 +109,9 @@
     <div id="vars"></div>
   </aside>
 </main>
+</div>
+
+<div id="page-ui-strings" class="page page-ui-strings"></div>
 
 <script src="parser.js"></script>
 <script src="runtime.js"></script>
@@ -114,6 +123,7 @@
 <script src="loc-writer.js"></script>
 <script src="translation-state.js"></script>
 <script src="translation-ui.js"></script>
+<script src="ui-strings.js"></script>
 <script src="ui.js"></script>
 </body>
 </html>

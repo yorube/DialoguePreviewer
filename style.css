@@ -26,6 +26,36 @@ body {
 }
 body.dragover { outline: 3px dashed var(--accent); outline-offset: -8px; }
 
+/* Top-level page tabs (Dialogue / UI Strings). */
+.page-tabs {
+  display: flex;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px;
+  flex: 0 0 auto;
+}
+.page-tab {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--fg-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+}
+.page-tab:hover { color: var(--fg); background: rgba(255,255,255,0.04); }
+.page-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--bg);
+}
+
+/* Each page fills the remaining vertical space. Default page is dialogue. */
+.page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+body.page-ui-strings #page-dialogue { display: none; }
+
 .topbar {
   display: flex;
   align-items: center;
