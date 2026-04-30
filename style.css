@@ -429,6 +429,18 @@ body.dragging-splitter * { user-select: none; }
   color: var(--fg-dim);
 }
 #node-list li:hover { background: var(--bg3); color: var(--fg); }
+#node-list li.active {
+  background: rgba(76, 193, 255, 0.16);
+  color: var(--fg);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+#node-list li.active .node-num {
+  opacity: 1;
+  background: rgba(76, 193, 255, 0.32);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+#node-list li.active .node-title { color: var(--accent); font-weight: 600; }
 .node-num {
   flex: 0 0 auto;
   padding: 1px 6px;

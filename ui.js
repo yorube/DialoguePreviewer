@@ -794,11 +794,14 @@
     // regardless of sort order or active filter.
     const padWidth = String(titles.length).length;
     const noted = state.activeGroup ? notedTitlesIn(state.activeGroup) : new Set();
+    const activeTitle = state.runtime && state.runtime.currentNodeTitle;
     const frag = document.createDocumentFragment();
     titles.forEach((title, i) => {
       const li = document.createElement('li');
       const hasNote = noted.has(title);
       if (hasNote) li.classList.add('has-note');
+      if (title === activeTitle) li.classList.add('active');
+      li.dataset.nodeTitle = title;
 
       const num = document.createElement('span');
       num.className = 'node-num';
@@ -828,6 +831,27 @@
     });
     list.appendChild(frag);
     $('node-count').textContent = `(${titles.length})`;
+  }
+
+  // Update the .active class on the node-list <li> for the current node
+  // without rebuilding the whole list. Called from setActiveNode so the
+  // highlight follows mid-dialogue jumps and sidebar clicks alike.
+  function syncActiveNodeInList() {
+    const list = $('node-list');
+    if (!list) return;
+    const activeTitle = state.runtime && state.runtime.currentNodeTitle;
+    let activeLi = null;
+    for (const li of list.querySelectorAll('li')) {
+      const on = li.dataset.nodeTitle === activeTitle;
+      li.classList.toggle('active', on);
+      if (on) activeLi = li;
+    }
+    if (activeLi) {
+      // Keep the highlighted row in view when the runtime jumps between
+      // nodes. block: 'nearest' avoids unnecessary scrolling when it's
+      // already visible.
+      activeLi.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2029,6 +2053,7 @@
     $('current-node').textContent = title;
     renderSource(title);
     loadNoteForNode(title);
+    syncActiveNodeInList();
   }
 
   function startAt(nodeTitle) {
