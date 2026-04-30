@@ -439,7 +439,7 @@
             alert(t('tr.alert.sourceLocale', { locale: activeLocale }));
             return;
         }
-        const ts = STATE.states.get(activeLocale);
+        const ts = getOrCreateState(activeLocale);
         const s = ts ? ts.stats() : { baselineCount: 0, overrideCount: 0 };
         if (s.baselineCount === 0 && s.overrideCount === 0) {
             alert(t('tr.alert.resetEmpty', { locale: activeLocale }));
@@ -510,8 +510,8 @@
             el.textContent = t('tr.stats.noLocale');
             return;
         }
-        const ts = STATE.states.get(activeLocale);
-        if (!ts) {
+        const ts = getOrCreateState(activeLocale);
+        if (!ts || (ts.stats().baselineCount === 0 && ts.stats().overrideCount === 0)) {
             el.textContent = t('tr.stats.notLoaded', { locale: activeLocale });
             return;
         }
@@ -539,7 +539,8 @@
     function lookupLine(uid, originalText) {
         const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
         if (!activeLocale) return { text: originalText, status: 'inactive', uid };
-        const ts = STATE.states.get(activeLocale);
+        if (isSourceLocale(activeLocale)) return { text: originalText, status: 'inactive', uid };
+        const ts = getOrCreateState(activeLocale);
         if (!ts) return { text: originalText, status: 'untranslated', uid };
         const text = ts.get(uid);
         if (text == null || text === '') {
@@ -640,7 +641,11 @@
             console.error('LocWriter missing');
             return;
         }
-        const ts = STATE.states.get(activeLocale);
+        // getOrCreateState (not raw .get) so a fresh page load that hasn't yet
+        // touched this locale still pulls the persisted overrides + source out
+        // of localStorage. Without this the export would silently produce a
+        // CSV with empty translation columns.
+        const ts = getOrCreateState(activeLocale);
         // If the user uploaded a file we keep their original format byte-for-byte.
         // Otherwise (inline-edits-only) we synthesize a CSV from the en-US project
         // AST so they can still download their progress.
