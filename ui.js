@@ -26,7 +26,7 @@
   // §1  Constants & version
   // ─────────────────────────────────────────────────────────────────────────
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const SNAPSHOT_LIMIT = 500;
   const SRC_FONT_MIN = 10, SRC_FONT_MAX = 22, SRC_FONT_DEFAULT = 14;
   const LOCALE_RE = /^(.+)\(([^()]+)\)\.json$/i;
@@ -62,7 +62,7 @@
       'btn.continue': '▼ Continue (Space)',
       'btn.openNote': '📝 Note',
       'btn.compareLangs': '📊 Compare languages',
-      'btn.compareLangs.tip': 'Show side-by-side translations of the current node across all available languages.',
+      'btn.compareLangs.tip': 'Switch to a full-page side-by-side translation table for the active node. Click any non-source cell to edit. Press Esc to exit.',
       'btn.resetOverrides': '🔄 Reset overrides ({n})',
       'compare.title': 'Translation comparison',
       'compare.tip': 'Each row is one translatable line / option in the current node. Cells show the displayed text per language (imported file + inline edits applied).',
@@ -80,6 +80,7 @@
       'compare.legend.translated': 'Translated',
       'compare.legend.untranslated': 'Untranslated (falls back to source)',
       'compare.legend.override': 'Inline edit',
+      'compare.editHint': '✏️ Click any non-source cell to edit (Ctrl+Enter saves, Esc cancels). Use 💾 Export above to save to .csv / .xlsx.',
       'compare.openInEdit': 'Edit in this language',
       'sidebar.nodes': 'Nodes',
       'panel.vars': 'Variables',
@@ -234,7 +235,7 @@
       'btn.continue': '▼ 繼續 (Space)',
       'btn.openNote': '📝 筆記',
       'btn.compareLangs': '📊 對照各語言',
-      'btn.compareLangs.tip': '把當前節點的對話與選項列出，比對所有可用語言的翻譯。',
+      'btn.compareLangs.tip': '切換到全頁的多語言對照表（當前節點），可以直接點任一非原文格修改譯文。Esc 退出。',
       'btn.resetOverrides': '🔄 重置覆寫 ({n})',
       'compare.title': '翻譯對照表',
       'compare.tip': '每一列是當前節點裡一條可翻譯的對話/選項。每格顯示該語言實際會被看到的文字（已套用匯入檔 + 站內編輯）。',
@@ -252,6 +253,7 @@
       'compare.legend.translated': '已翻譯',
       'compare.legend.untranslated': '未翻譯（回退原文）',
       'compare.legend.override': '站內編輯',
+      'compare.editHint': '✏️ 點任一非原文欄位即可編輯（Ctrl+Enter 儲存、Esc 取消）。要存檔請用上方 💾 匯出 .csv / .xlsx。',
       'compare.openInEdit': '切到此語言並進入 Edit Mode',
       'sidebar.nodes': '節點清單',
       'panel.vars': '變數狀態',
@@ -464,6 +466,7 @@
     speakerGender: {},              // name → 'M' | 'F' | 'N'
     noteSaveTimer: null,            // debounce timer for note autosave
     noteLoadedFor: null,            // {group, title} the textarea is bound to
+    compareMode: false,             // Compare Mode (full-page side-by-side)
   };
 
   function activeProject() {
@@ -1446,13 +1449,14 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // §12b Translation comparison modal
+  // §12b Translation Compare Mode (full-page side-by-side view)
   // ─────────────────────────────────────────────────────────────────────────
-  // Side-by-side comparison of every translatable line/option in the current
-  // node across all bundled locales for the active script. Reads the parsed
-  // project for each locale (lazy-loaded on demand) and overlays
-  // TranslationUI overrides per locale so imported files + inline edits show
-  // up exactly as a translator would see them.
+  // Switching Compare Mode on hides the source / vars panels and the dialogue
+  // toolbar; the dialogue panel fills the freed space and shows a comparison
+  // table for the active node across every bundled locale. Cells in non-source
+  // columns are click-to-edit (writes back to that locale's TranslationState).
+  // Mutually exclusive with Edit Mode — turning either on clears the other.
+  // Excel/CSV export uses the same 💾 button as the rest of the previewer.
 
   // Walk a parsed node's statements depth-first and yield every translatable
   // entry (Dialogue line / option) in display order, preserving srcLine so we
@@ -1511,28 +1515,48 @@
     return loc === 'en-US' || loc === 'zh-TW' || loc === 'unknown';
   }
 
-  // Open the comparison modal for the current node. Lazy-loads every locale's
-  // project, then renders an HTML table.
-  async function openTranslationCompareModal() {
-    const overlay = $('compare-overlay');
-    const body = $('compare-body');
-    const titleEl = $('compare-node-title');
-    if (!overlay || !body) return;
+  // Toggle Compare Mode on/off. When turning on, also disable Edit Mode (the
+  // two are mutually exclusive view modes — only one can take over the
+  // dialogue panel at a time). Idempotent: redundant toggles are no-ops.
+  function setCompareMode(on) {
+    on = !!on;
+    if (state.compareMode === on) return;
+    state.compareMode = on;
+    document.body.classList.toggle('t-compare-mode', on);
+    const btn = $('compare-mode-toggle');
+    if (btn) btn.classList.toggle('active', on);
+    if (on && typeof TranslationUI !== 'undefined' && TranslationUI.isActive
+        && TranslationUI.isActive() && TranslationUI.setEditMode) {
+      TranslationUI.setEditMode(false);
+    }
+    if (on) {
+      renderCompareView().catch(err => {
+        console.error('[compare] render failed', err);
+        setStatus(t('status.error', { msg: err.message || String(err), at: 'compare' }));
+      });
+    }
+  }
+
+  function toggleCompareMode() { setCompareMode(!state.compareMode); }
+
+  // Render (or re-render) the comparison view for the active node into
+  // #compare-view. Lazy-loads every locale's project. Safe to call on every
+  // node change — no-op if Compare Mode is off.
+  async function renderCompareView() {
+    if (!state.compareMode) return;
+    const view = $('compare-view');
+    if (!view) return;
 
     const group = state.activeGroup;
     const nodeTitle = state.runtime && state.runtime.currentNodeTitle;
     if (!group || !nodeTitle) {
-      body.textContent = t('compare.noNode');
-      titleEl.textContent = '';
-      overlay.hidden = false;
+      view.innerHTML = `<div class="compare-empty-state">${t('compare.noNode')}</div>`;
       return;
     }
 
     const localesMap = state.groups.get(group);
     if (!localesMap) return;
     const allLocales = [...localesMap.keys()];
-    // Stable column order: en-US first, zh-TW next (other source), then the
-    // remaining locales sorted. Keeps the source side-by-side with translations.
     const ordered = [];
     if (localesMap.has('en-US')) ordered.push('en-US');
     if (localesMap.has('zh-TW')) ordered.push('zh-TW');
@@ -1540,12 +1564,8 @@
       if (!ordered.includes(loc)) ordered.push(loc);
     }
 
-    titleEl.textContent = nodeTitle;
-    body.textContent = t('compare.loading', { n: ordered.length });
-    overlay.hidden = false;
+    view.innerHTML = `<div class="compare-empty-state">${t('compare.loading', { n: ordered.length })}</div>`;
 
-    // Lazy-load every locale in parallel. A failure on one locale is logged
-    // and shown as a per-column error rather than blocking the whole modal.
     const loadResults = await Promise.all(ordered.map(async (loc) => {
       try {
         const project = await ensureLoaded(group, loc);
@@ -1556,32 +1576,69 @@
       }
     }));
 
-    renderCompareTable(body, group, nodeTitle, loadResults);
+    // Bail out if user exited Compare Mode while we were loading.
+    if (!state.compareMode) return;
+    renderCompareTable(view, group, nodeTitle, loadResults);
   }
 
   function renderCompareTable(container, group, nodeTitle, loadResults) {
     container.innerHTML = '';
 
+    // ── Header bar (node title + tip + legend) ─────────────────────────────
+    const head = document.createElement('div');
+    head.className = 'compare-head';
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'compare-titlebar';
+    const titleLabel = document.createElement('span');
+    titleLabel.className = 'compare-node-label';
+    titleLabel.textContent = nodeTitle;
+    titleRow.appendChild(titleLabel);
+    const tip = document.createElement('span');
+    tip.className = 'compare-tip';
+    tip.textContent = t('compare.tip');
+    titleRow.appendChild(tip);
+    head.appendChild(titleRow);
+
+    const legend = document.createElement('div');
+    legend.className = 'compare-legend';
+    legend.innerHTML =
+      `<span class="compare-chip compare-chip-source">${t('compare.legend.source')}</span>` +
+      `<span class="compare-chip compare-chip-translated">${t('compare.legend.translated')}</span>` +
+      `<span class="compare-chip compare-chip-override">${t('compare.legend.override')}</span>` +
+      `<span class="compare-chip compare-chip-untranslated">${t('compare.legend.untranslated')}</span>` +
+      `<span class="compare-edit-hint">${t('compare.editHint')}</span>`;
+    head.appendChild(legend);
+    container.appendChild(head);
+
     // Source = en-US; if missing fall back to first loaded locale.
     let sourceRes = loadResults.find(r => r.locale === 'en-US' && r.project);
     if (!sourceRes) sourceRes = loadResults.find(r => r.project);
     if (!sourceRes) {
-      container.textContent = t('compare.missing');
+      const empty = document.createElement('div');
+      empty.className = 'compare-empty-state';
+      empty.textContent = t('compare.missing');
+      container.appendChild(empty);
       return;
     }
 
     const sourceNode = sourceRes.project.nodes.get(nodeTitle);
     if (!sourceNode) {
-      container.textContent = t('error.nodeNotFound', { title: nodeTitle });
+      const empty = document.createElement('div');
+      empty.className = 'compare-empty-state';
+      empty.textContent = t('error.nodeNotFound', { title: nodeTitle });
+      container.appendChild(empty);
       return;
     }
     const entries = flattenComparableEntries(sourceNode);
     if (!entries.length) {
-      container.textContent = t('compare.empty');
+      const empty = document.createElement('div');
+      empty.className = 'compare-empty-state';
+      empty.textContent = t('compare.empty');
+      container.appendChild(empty);
       return;
     }
 
-    // Per-locale srcLine maps for cell lookup.
     const localeMaps = new Map();
     for (const r of loadResults) {
       localeMaps.set(r.locale, r.project ? buildLocaleSrcLineMap(r.project, nodeTitle) : null);
@@ -1593,19 +1650,8 @@
     const enFilename = enEntry ? enEntry.filename : null;
     const sourceNodeIndex = sourceNode.nodeIndex;
 
-    // Legend chips above the table.
-    const legend = document.createElement('div');
-    legend.className = 'compare-legend';
-    legend.innerHTML =
-      `<span class="compare-chip compare-chip-source">${t('compare.legend.source')}</span>` +
-      `<span class="compare-chip compare-chip-translated">${t('compare.legend.translated')}</span>` +
-      `<span class="compare-chip compare-chip-override">${t('compare.legend.override')}</span>` +
-      `<span class="compare-chip compare-chip-untranslated">${t('compare.legend.untranslated')}</span>`;
-    container.appendChild(legend);
-
     const tableWrap = document.createElement('div');
     tableWrap.className = 'compare-table-wrap';
-
     const table = document.createElement('table');
     table.className = 'compare-table';
 
@@ -1669,7 +1715,8 @@
       for (const r of loadResults) {
         const td = document.createElement('td');
         td.className = 'compare-cell-text';
-        if (isSourceLocaleForCompare(r.locale)) td.classList.add('compare-cell-source');
+        const isSource = isSourceLocaleForCompare(r.locale);
+        if (isSource) td.classList.add('compare-cell-source');
         if (r.locale === state.activeLocale) td.classList.add('compare-cell-active');
 
         if (r.error) {
@@ -1684,12 +1731,9 @@
         const localeEntry = localeMap ? localeMap.get(entry.srcLine) : null;
         const fallbackText = localeEntry ? localeEntry.text : '';
 
-        // For non-source locales, prefer override/baseline from TranslationState
-        // (so imported files + inline edits show up). For source locales
-        // (en-US, zh-TW) we always show the bundled JSON text.
         let displayedText = fallbackText;
         let status = 'inactive';
-        if (!isSourceLocaleForCompare(r.locale) && uid
+        if (!isSource && uid
             && typeof TranslationUI !== 'undefined' && TranslationUI.lookupForLocale) {
           const info = TranslationUI.lookupForLocale(r.locale, uid, fallbackText);
           displayedText = info.text;
@@ -1698,20 +1742,30 @@
 
         if (status === 'override') td.classList.add('compare-cell-override');
         else if (status === 'baseline') td.classList.add('compare-cell-translated');
-        else if (status === 'untranslated' && !isSourceLocaleForCompare(r.locale)) {
+        else if (status === 'untranslated' && !isSource) {
           td.classList.add('compare-cell-untranslated');
         }
 
-        if (!localeMap && !isSourceLocaleForCompare(r.locale)) {
-          // Project couldn't be loaded for this locale at all.
+        // Non-source cells with a UID are click-to-edit. Edits write to the
+        // per-locale TranslationState via TranslationUI.setOverrideForLocale.
+        if (!isSource && uid && typeof TranslationUI !== 'undefined' && TranslationUI.setOverrideForLocale) {
+          td.classList.add('compare-cell-editable');
+          td.dataset.uid = uid;
+          td.dataset.locale = r.locale;
+          td.dataset.fallback = fallbackText || '';
+          td.addEventListener('click', (ev) => {
+            if (ev.target.closest('.compare-cell-editor')) return;
+            openCompareCellEditor(td);
+          });
+        }
+
+        if (!localeMap && !isSource) {
           td.classList.add('compare-cell-untranslated');
           td.textContent = t('compare.missing');
         } else if (!displayedText) {
           td.classList.add('compare-cell-empty');
           td.textContent = t('compare.empty');
         } else {
-          // Use markupToSafeHtml so TMP/MBU markup renders consistently with
-          // the rest of the previewer (color, italics, etc.).
           td.innerHTML = YarnParser.markupToSafeHtml(displayedText);
         }
         tr.appendChild(td);
@@ -1723,9 +1777,75 @@
     container.appendChild(tableWrap);
   }
 
-  function closeCompareModal() {
-    const overlay = $('compare-overlay');
-    if (overlay) overlay.hidden = true;
+  // Inline cell editor: replaces a cell's content with a textarea pre-filled
+  // with the current displayed text. Ctrl/Cmd+Enter saves, Esc cancels.
+  // Saving writes to TranslationState[locale] (override) and re-renders the
+  // table so other panels (active language column, status etc.) stay in sync.
+  function openCompareCellEditor(td) {
+    if (td.querySelector('.compare-cell-editor')) return;
+    const uid = td.dataset.uid;
+    const locale = td.dataset.locale;
+    const fallback = td.dataset.fallback || '';
+    if (!uid || !locale) return;
+
+    const currentText = td.classList.contains('compare-cell-empty') ||
+      td.classList.contains('compare-cell-untranslated') ||
+      td.classList.contains('compare-cell-missing')
+      ? ''
+      : (td.textContent || '').trim();
+
+    const prevHtml = td.innerHTML;
+
+    const editor = document.createElement('div');
+    editor.className = 'compare-cell-editor';
+    const ta = document.createElement('textarea');
+    ta.value = currentText || fallback || '';
+    ta.rows = Math.min(8, Math.max(2, ta.value.split('\n').length + 1));
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'confirm';
+    ok.textContent = '✓';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'cancel';
+    cancel.textContent = '✗';
+    actions.appendChild(ok);
+    actions.appendChild(cancel);
+    editor.appendChild(ta);
+    editor.appendChild(actions);
+
+    td.innerHTML = '';
+    td.appendChild(editor);
+    ta.focus();
+    ta.select();
+
+    const close = () => { td.innerHTML = prevHtml; };
+    cancel.addEventListener('click', (ev) => { ev.stopPropagation(); close(); });
+    ok.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const newText = ta.value;
+      try {
+        TranslationUI.setOverrideForLocale(locale, uid, newText);
+      } catch (e) {
+        console.error('[compare] save override failed', e);
+        alert(e.message || String(e));
+        close();
+        return;
+      }
+      // Re-render so all references to this UID across locales (e.g. multiple
+      // rows with shared UIDs in pathological cases) refresh consistently.
+      renderCompareView();
+    });
+    ta.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); close(); }
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); ok.click(); }
+    });
+    // Stop bubbling so a click inside the textarea doesn't re-fire the
+    // cell-level click handler that opens the editor.
+    editor.addEventListener('click', (ev) => ev.stopPropagation());
+    editor.addEventListener('mousedown', (ev) => ev.stopPropagation());
   }
 
   // Render the action area (continue / choice buttons) inline at the end of
@@ -1926,6 +2046,10 @@
     if (typeof TranslationUI !== 'undefined' && TranslationUI.isActive && TranslationUI.isActive()) {
       redrawTranslationsInPlace();
     }
+    // Compare Mode: rebuild the comparison table for the new active node.
+    if (state.compareMode) {
+      renderCompareView().catch(err => console.error('[compare]', err));
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1963,21 +2087,19 @@
       if (e.key === 'Escape' && !helpOverlay.hidden) closeHelp();
     });
 
-    // Translation comparison modal — open on 📊 button, same close UX as help.
-    const compareOverlay = $('compare-overlay');
-    if (compareOverlay) {
-      $('compare-btn').addEventListener('click', () => {
-        openTranslationCompareModal().catch(err => {
-          console.error('[compare] open failed', err);
-          setStatus(t('status.error', { msg: err.message || String(err), at: 'compare' }));
-        });
-      });
-      $('compare-close').addEventListener('click', closeCompareModal);
-      compareOverlay.addEventListener('click', e => {
-        if (e.target === compareOverlay) closeCompareModal();
-      });
+    // Compare Mode toggle (top-bar) — full-page switch to the side-by-side
+    // translation table. Esc exits Compare Mode (only if no other dialog /
+    // editor / inline thing is currently focused that consumed Esc).
+    const compareToggle = $('compare-mode-toggle');
+    if (compareToggle) {
+      compareToggle.addEventListener('click', toggleCompareMode);
       document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && !compareOverlay.hidden) closeCompareModal();
+        if (e.key !== 'Escape') return;
+        if (!state.compareMode) return;
+        // If a cell editor is open, let it handle Esc itself.
+        if (document.querySelector('.compare-cell-editor textarea:focus')) return;
+        if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+        setCompareMode(false);
       });
     }
 
@@ -2082,6 +2204,12 @@
         markExported,
         getExportState,
         isExportDirty,
+        // Mutually-exclusive modes: when user toggles Edit Mode on, drop out
+        // of Compare Mode automatically (and vice versa, handled in
+        // setCompareMode).
+        onEditModeChange: (active) => {
+          if (active && state.compareMode) setCompareMode(false);
+        },
       });
     }
 

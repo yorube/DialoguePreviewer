@@ -400,13 +400,21 @@
         if (overlay && !overlay.hidden) overlay.hidden = true;
     });
 
-    function toggleMode() {
-        STATE.translationMode = !STATE.translationMode;
+    function toggleMode() { setMode(!STATE.translationMode); }
+
+    function setMode(on) {
+        on = !!on;
+        if (STATE.translationMode === on) return;
+        STATE.translationMode = on;
         const toggle = document.getElementById('t-mode-toggle');
         if (toggle) toggle.classList.toggle('active', STATE.translationMode);
         if (STATE.translationMode) ensureLoaded();
         updateStats();
         if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+        // Notify host so it can keep mutually-exclusive modes (e.g. Compare Mode) in sync.
+        if (STATE.hooks && STATE.hooks.onEditModeChange) {
+            STATE.hooks.onEditModeChange(STATE.translationMode);
+        }
     }
 
     function getOrCreateState(locale) {
@@ -1008,12 +1016,33 @@
         return { text, status: ts.source(uid) };
     }
 
+    // Used by Compare Mode (ui.js) to write edits back to a non-active locale.
+    // Mirrors the inline editor's flow: setOverride → markEditDirty → updateStats.
+    function setOverrideForLocale(locale, uid, text) {
+        if (!locale || !uid) return;
+        if (isSourceLocale(locale)) {
+            throw new Error(`Cannot edit source locale "${locale}"`);
+        }
+        const ts = getOrCreateState(locale);
+        if (!ts) return;
+        ts.setOverride(uid, text);
+        if (STATE.hooks && STATE.hooks.markEditDirty) STATE.hooks.markEditDirty();
+        // Stats reflect the *active* locale; only refresh if that's what we touched.
+        const active = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+        if (active === locale) {
+            updateStats();
+            if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+        }
+    }
+
     global.TranslationUI = {
         install,
         lookupLine,
         lookupForLocale,
         decorateLine,
         getUidFor,
+        setOverrideForLocale,
+        setEditMode: setMode,
         notifyLocaleChange: () => updateStats(),
         isActive: () => STATE.translationMode,
         refreshExportStatus,

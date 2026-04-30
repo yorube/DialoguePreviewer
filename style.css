@@ -805,33 +805,82 @@ body.dragging-splitter * { user-select: none; }
   .row-chose { margin-left: 8px; }
 }
 
-/* === Translation comparison modal ======================================== */
-/* Side-by-side view of every translatable line/option in the current node
-   across every bundled locale. Reuses .help-overlay/.help-dialog for the
-   modal shell; sizes wider since we're laying out a table. */
-.compare-overlay { padding: 14px; }
-.compare-dialog {
-  max-width: min(98vw, 1600px);
-  max-height: 92vh;
-  width: 100%;
-  padding: 18px 22px 14px;
+/* === Compare Mode (full-page side-by-side translation table) ============= */
+/* When active (`body.t-compare-mode`), the source/vars panels and the
+   dialogue toolbar collapse out of the layout; the dialogue panel takes the
+   freed space and renders #compare-view. Sidebar stays visible for node
+   navigation. The 💾 Export button in topbar-globalops still saves CSV/xlsx. */
+
+.compare-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(120, 180, 255, 0.10);
+  border: 1px solid rgba(120, 180, 255, 0.30);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: var(--fg);
+  margin-left: 6px;
+}
+.compare-mode-toggle:hover { background: rgba(120, 180, 255, 0.22); }
+.compare-mode-toggle.active {
+  background: rgba(80, 180, 100, 0.25);
+  border-color: rgba(80, 180, 100, 0.7);
+}
+
+/* Mode-takeover layout overrides. */
+body.t-compare-mode .source-panel,
+body.t-compare-mode .vars-panel,
+body.t-compare-mode .splitter[data-split="sidebar-source"],
+body.t-compare-mode .splitter[data-split="source-dialogue"],
+body.t-compare-mode .splitter[data-split="dialogue-vars"] {
+  display: none !important;
+}
+body.t-compare-mode .layout {
+  grid-template-columns: var(--col-sidebar) minmax(0, 1fr);
+}
+body.t-compare-mode .dialogue-toolbar,
+body.t-compare-mode .dialogue-modebar,
+body.t-compare-mode .dialogue-header,
+body.t-compare-mode #transcript,
+body.t-compare-mode #flat-edit-view {
+  display: none !important;
+}
+
+/* Compare view shell — fills the dialogue panel when Compare Mode is on. */
+.compare-view { display: none; }
+body.t-compare-mode .compare-view {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
 }
-.compare-toolbar {
+
+/* Sticky head: title bar + legend, table scrolls beneath. */
+.compare-head {
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+}
+.compare-titlebar {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 10px;
-  margin: 4px 0 8px;
+  margin-bottom: 6px;
 }
 .compare-node-label {
   font-family: ui-monospace, "Cascadia Code", monospace;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--accent, #88c8ff);
-  background: rgba(120, 180, 255, 0.10);
-  border: 1px solid rgba(120, 180, 255, 0.30);
-  padding: 2px 8px;
+  background: rgba(120, 180, 255, 0.12);
+  border: 1px solid rgba(120, 180, 255, 0.35);
+  padding: 3px 10px;
   border-radius: 3px;
 }
 .compare-tip {
@@ -842,8 +891,7 @@ body.dragging-splitter * { user-select: none; }
 .compare-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin: 0 0 8px;
+  gap: 8px;
   font-size: 11px;
   color: var(--fg-dim);
 }
@@ -859,14 +907,19 @@ body.dragging-splitter * { user-select: none; }
 .compare-chip-translated   { background: rgba(140, 220, 140, 0.10); border-color: rgba(140, 220, 140, 0.4); }
 .compare-chip-override     { background: rgba(120, 180, 255, 0.10); border-color: rgba(120, 180, 255, 0.5); }
 .compare-chip-untranslated { background: rgba(220, 200, 100, 0.08); border-color: rgba(220, 200, 100, 0.4); color: #c8b078; }
-
-.compare-body {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+.compare-edit-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-style: italic;
 }
+.compare-empty-state {
+  padding: 24px;
+  text-align: center;
+  color: var(--fg-dim);
+  font-style: italic;
+}
+
 .compare-table-wrap {
   flex: 1;
   overflow: auto;
@@ -937,9 +990,63 @@ body.dragging-splitter * { user-select: none; }
 .compare-cell-empty        { color: var(--fg-dim); font-style: italic; opacity: 0.5; }
 .compare-cell-error        { color: #d68a8a; text-align: center; font-weight: 700; }
 
+/* Click-to-edit affordance for non-source cells. */
+.compare-cell-editable {
+  cursor: text;
+  position: relative;
+}
+.compare-cell-editable:hover {
+  background: rgba(120, 180, 255, 0.08);
+  outline: 1px dashed rgba(120, 180, 255, 0.4);
+  outline-offset: -1px;
+}
+.compare-cell-editable.compare-cell-active:hover {
+  background: rgba(120, 180, 255, 0.18);
+}
+
+/* Inline cell editor (textarea + ✓ / ✗ stack). */
+.compare-cell-editor {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+}
+.compare-cell-editor textarea {
+  flex: 1;
+  min-height: 2.4em;
+  font: inherit;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid #88c8ff;
+  border-radius: 3px;
+  padding: 4px 6px;
+  resize: vertical;
+}
+.compare-cell-editor .actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.compare-cell-editor button {
+  padding: 1px 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.compare-cell-editor button.confirm { border-color: #6c6; }
+.compare-cell-editor button.confirm:hover { background: rgba(100, 200, 100, 0.15); }
+.compare-cell-editor button.cancel  { border-color: #c66; }
+.compare-cell-editor button.cancel:hover  { background: rgba(200, 100, 100, 0.15); }
+
+/* Compare Mode on narrow viewports — keep the table dense but readable. */
 @media (max-width: 800px) {
-  .compare-dialog { padding: 12px 14px; }
   .compare-table { font-size: 12px; }
   .compare-col-locale { min-width: 140px; }
   .compare-col-speaker { width: 100px; }
+  body.t-compare-mode .layout {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
 }
