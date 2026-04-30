@@ -548,6 +548,15 @@
         return t('tr.export.ago.days', { n: Math.floor(h / 24) });
     }
 
+    function formatExportDate(iso) {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return '';
+        const y = d.getFullYear();
+        const mo = String(d.getMonth() + 1).padStart(2, '0');
+        const da = String(d.getDate()).padStart(2, '0');
+        return `${y}/${mo}/${da}`;
+    }
+
     function refreshExportStatus() {
         const el = document.getElementById('t-export-status');
         if (!el) return;
@@ -568,11 +577,17 @@
         if (dirty) {
             el.className = 't-export-status dirty';
             el.textContent = s.lastExportAt
-                ? t('tr.export.dirty', { ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()) })
+                ? t('tr.export.dirty', {
+                    date: formatExportDate(s.lastExportAt),
+                    ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()),
+                  })
                 : t('tr.export.dirtyNever');
         } else {
             el.className = 't-export-status clean';
-            el.textContent = t('tr.export.clean', { ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()) });
+            el.textContent = t('tr.export.clean', {
+                date: formatExportDate(s.lastExportAt),
+                ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()),
+            });
         }
     }
 

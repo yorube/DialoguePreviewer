@@ -115,13 +115,38 @@
         const dirty = !s.lastExportAt
             || new Date(s.lastEditAt).getTime() > new Date(s.lastExportAt).getTime();
         if (dirty) {
-            el.textContent = '⚠️ 有未匯出的編輯';
+            el.textContent = s.lastExportAt
+                ? `⚠️ 有未匯出的編輯（上次匯出 ${formatDate(s.lastExportAt)}，${formatAgo(Date.now() - new Date(s.lastExportAt).getTime())} 前）`
+                : '⚠️ 有未匯出的編輯，還沒匯出過';
             el.className = 'ui-strings-status dirty';
         } else {
-            el.textContent = '✓ 已存檔';
+            el.textContent = `✓ 已存檔 ${formatDate(s.lastExportAt)}（${formatAgo(Date.now() - new Date(s.lastExportAt).getTime())} 前）`;
             el.className = 'ui-strings-status clean';
         }
     }
+
+    function formatDate(iso) {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return '';
+        const y = d.getFullYear();
+        const mo = String(d.getMonth() + 1).padStart(2, '0');
+        const da = String(d.getDate()).padStart(2, '0');
+        return `${y}/${mo}/${da}`;
+    }
+
+    function formatAgo(ms) {
+        const m = Math.floor(ms / 60000);
+        if (m < 1) return '<1m';
+        if (m < 60) return `${m}m`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `${h}h`;
+        return `${Math.floor(h / 24)}d`;
+    }
+
+    // Refresh "X minutes ago" copy on a slow timer.
+    setInterval(() => {
+        try { refreshExportStatus(); } catch (e) {}
+    }, 30 * 1000);
 
     // ─────────────────────────────────────────────────────────────────────
     // Shell: top toolbar, sheet tabs, filter, table container
