@@ -617,7 +617,9 @@
   function refreshScriptDropdown() {
     const sel = $('script-select');
     sel.innerHTML = '';
-    for (const name of [...state.groups.keys()].sort((a, b) => a.localeCompare(b))) {
+    // Iterate in manifest insertion order so the dropdown follows the story
+    // sequence the project authors chose, not alphabetical.
+    for (const name of state.groups.keys()) {
       const opt = document.createElement('option');
       opt.value = name;
       opt.textContent = name;
