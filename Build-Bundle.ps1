@@ -209,13 +209,59 @@ if ($stubCount -gt 0) {
     Write-Host ("產出 stub 數: " + $stubCount + " (新語言可預覽 + 站內編輯)") -ForegroundColor DarkYellow
 }
 
+# 故事順序排序：每個 script 名稱 → 排序 key。
+# 主線(教學 → 第一日 → ... → 第五日 → 結局)在前,
+# 跨天通用對話(工廠支線/路人/街景)在後。
+# 之後加新檔案 → 第六日之類 → 通用公式自動把它擺進對應位置;
+# 完全不認識的檔案會被丟到最尾巴(100000),不會打亂已知檔案的順序。
+function Get-StoryOrderKey {
+    param([string]$name)
+
+    # Cross-day 通用對話 → 排到最後
+    if ($name -match '工廠.*支線對話')   { return 10000 }
+    if ($name -match '工廠.*路人對話')   { return 10001 }
+    if ($name -match '街景.*路人對話')   { return 10002 }
+    if ($name -match '街景對話$')        { return 10003 }
+
+    # 教學
+    if ($name -match '教學關')           { return 10 }
+
+    # 結局(異常後日談排在後日談後面)
+    if ($name -match '異常後日談')       { return 9001 }
+    if ($name -match '後日談')           { return 9000 }
+
+    # 第一日(結構特殊:只有主角家 + 工廠第一日,沒有回家)
+    if ($name -match '^yarn_主角家$')    { return 100 }
+    if ($name -match '工廠第一日')       { return 110 }
+
+    # 第五日(目前只有單一檔)
+    if ($name -match '第五日')           { return 500 }
+
+    # 通用：第N日 + 階段(主角家+街景=morning, 工廠=work, 回家=return)
+    $chDigits = @{ '一'=1; '二'=2; '三'=3; '四'=4; '五'=5; '六'=6; '七'=7; '八'=8; '九'=9; '十'=10 }
+    if ($name -match '第([一二三四五六七八九十])日') {
+        $dayCh = $Matches[1]
+        if ($chDigits.Contains($dayCh)) {
+            $dayNum = [int]$chDigits[$dayCh]
+            $base = $dayNum * 100
+            if ($name -match '^yarn_主角家') { return $base + 0  }
+            if ($name -match '^yarn_工廠')   { return $base + 10 }
+            if ($name -match '^yarn_回家')   { return $base + 20 }
+            return $base + 50  # 第N日但階段不明
+        }
+    }
+
+    # 完全不認識 → 推到最尾巴
+    return 100000
+}
+
 # 組 manifest
 $manifest = @{
     generatedAt = (Get-Date).ToString('o')
     scripts     = @()
 }
 
-foreach ($base in ($scripts.Keys | Sort-Object)) {
+foreach ($base in ($scripts.Keys | Sort-Object { Get-StoryOrderKey $_ }, { $_ })) {
     $entry = [ordered]@{
         name    = $base
         locales = [ordered]@{}
@@ -384,8 +430,8 @@ if ($xlsxPath) {
 
 Write-Host ""
 Write-Host "完成：" -ForegroundColor Green
-Write-Host "  共 $($scripts.Count) 部劇本"
-foreach ($base in ($scripts.Keys | Sort-Object)) {
+Write-Host "  共 $($scripts.Count) 部劇本(故事順序)"
+foreach ($base in ($scripts.Keys | Sort-Object { Get-StoryOrderKey $_ }, { $_ })) {
     $locs = ($scripts[$base].locales.Keys | Sort-Object) -join ', '
     Write-Host "  - $base  ($locs)"
 }
