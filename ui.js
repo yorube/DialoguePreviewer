@@ -98,7 +98,6 @@
 <ul>
   <li>Hover any line or option → click the <b>✏️</b> icon → an inline editor opens.</li>
   <li>Save with <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> or the <b>✓</b> button. Cancel with <kbd>Esc</kbd> or <b>✗</b>.</li>
-  <li><code>{$variable}</code> tokens are placeholders that the runtime substitutes with the actual value at play time. <b>Leave them exactly as-is</b> — don't delete, rename, move, or translate them. Only translate the text around them.</li>
 </ul>
 
 <h3>Symbols in the flat view</h3>
@@ -252,7 +251,6 @@
 <ul>
   <li>滑鼠移到任一行或選項 → 點 <b>✏️</b> → 出現內聯編輯器。</li>
   <li><kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> 或 <b>✓</b> 儲存,<kbd>Esc</kbd> 或 <b>✗</b> 取消。</li>
-  <li><code>{$variable}</code> 是 runtime 會代入實際值的占位標記。<b>保持原樣不動</b> — 不要刪、不要改名、不要移動位置、也不要翻譯它,只翻它周圍的文字就好。</li>
 </ul>
 
 <h3>攤平視圖裡的符號</h3>
