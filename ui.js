@@ -91,10 +91,19 @@
       'tr.editMode.tip': 'Enable to inline-edit translations on the dialogue preview. Edits are saved in your browser only.',
       'tr.upload': '📥 Import translation file',
       'tr.upload.tip': 'Import your filled .csv / .xlsx — fully replaces the current language with the new file.',
+      'tr.startNew': '📋 Start new translation',
+      'tr.startNew.tip': 'Generate a blank v2 LocKit CSV for the current target language and download it. Use this if you do not have a previous export to import.',
       'tr.download': '💾 Export translation file',
       'tr.download.tip': 'Export a .csv / .xlsx with the same format you imported, with translations + inline edits filled in.',
       'tr.reset': '🔁 Reset this language',
       'tr.reset.tip': 'Clear imported translation + inline edits for this language. Falls back to bundled defaults.',
+      'tr.activation.title': 'Editing is locked until you import a translation file or start a new one.',
+      'tr.activation.body': 'Your work is saved as the file you Export — browser cache (localStorage) is only a session backup and may be cleared (e.g. Safari clears it after 7 days of no visits, or when you switch browsers / computers). Pick one of the options below to begin editing {locale}.',
+      'tr.activation.import': '📥 Import existing file',
+      'tr.activation.startNew': '📋 Start new (download blank)',
+      'tr.activation.recover': '↩ Recover from cache (risky)',
+      'tr.alert.sourceLocaleStartNew': 'Cannot start a new translation while {locale} is selected — it is a source language. Switch the Text language to a target locale (ru-RU / fr-FR / it-IT / es-ES / ja-JP) first.',
+      'tr.confirm.startNewWithCache': 'Cached work for {locale} exists in your browser. Starting a new translation will discard the cache. Continue?',
       'tr.editBtn.tip': 'Edit this line (Ctrl/Cmd+Enter to save, Esc to cancel)',
       'tr.editConfirm': '✓ Save',
       'tr.editCancel': '✗ Cancel',
@@ -221,10 +230,19 @@
       'tr.editMode.tip': '開啟後，可以在對話預覽上點 ✏️ 直接修改該句譯文。所有改動只存在你的瀏覽器內。',
       'tr.upload': '📥 匯入翻譯檔',
       'tr.upload.tip': '匯入填好的 .csv / .xlsx — 會「整個替換」當前語言為新檔內容。',
+      'tr.startNew': '📋 開新檔',
+      'tr.startNew.tip': '為當前目標語言產生一份空白的 v2 LocKit CSV 並下載。沒有前一次匯出檔可以用時用這個。',
       'tr.download': '💾 匯出翻譯檔',
       'tr.download.tip': '匯出與匯入同格式的 .csv / .xlsx，譯文欄填上目前所有匯入 + 站內編輯的最新內容。',
       'tr.reset': '🔁 重置該語言譯文',
       'tr.reset.tip': '清掉這個語言的「匯入譯文 + 站內編輯」，回到 bundle 預設的譯文。',
+      'tr.activation.title': '編輯功能尚未開啟 — 請先匯入翻譯檔或開新檔。',
+      'tr.activation.body': '你的譯文是以「匯出檔案」為唯一存檔；瀏覽器快取（localStorage）只是 session 備份,隨時可能被清掉（例如 Safari 7 天沒回站會清,或換瀏覽器 / 換電腦也讀不到）。請選下面其中一個方式開始編輯 {locale}。',
+      'tr.activation.import': '📥 匯入既有檔案',
+      'tr.activation.startNew': '📋 開新檔(下載空白)',
+      'tr.activation.recover': '↩ 從快取復原(有風險)',
+      'tr.alert.sourceLocaleStartNew': '無法開新檔 — {locale} 是來源語言。請先把上方「文本語言」切到目標語言(ru-RU / fr-FR / it-IT / es-ES / ja-JP)。',
+      'tr.confirm.startNewWithCache': '瀏覽器內有 {locale} 的快取譯文。開新檔會把快取清掉,確定繼續?',
       'tr.editBtn.tip': '編輯這句譯文（Ctrl/Cmd+Enter 存、Esc 取消）',
       'tr.editConfirm': '✓ 儲存',
       'tr.editCancel': '✗ 取消',
@@ -1190,6 +1208,12 @@
     header.className = 'flat-node-title';
     header.textContent = title;
     view.appendChild(header);
+
+    // Activation banner (Import / Start new / Recover) — only present when
+    // the user hasn't yet activated this locale's editing this session.
+    if (typeof TranslationUI !== 'undefined' && TranslationUI.injectActivationBanner) {
+      TranslationUI.injectActivationBanner(view);
+    }
 
     renderFlatStatements(view, node.statements, node);
   }

@@ -20,7 +20,32 @@
         ready: false,
         translationMode: false,
         hooks: null,
+        // File-centric workflow: localStorage is just a session backup. The
+        // user must explicitly Import / Start new / Recover-from-cache before
+        // ✏️ buttons appear, so they never silently rely on cache surviving
+        // a Safari ITP wipe or a different machine.
+        activatedLocales: new Set(),
     };
+
+    function isLocaleActivated(locale) {
+        return !!locale && STATE.activatedLocales.has(locale);
+    }
+    function activateLocale(locale) {
+        if (!locale) return;
+        STATE.activatedLocales.add(locale);
+    }
+    function hasCacheForLocale(locale) {
+        if (!locale) return false;
+        try {
+            const raw = localStorage.getItem('mbu-yarn-translation-' + locale);
+            if (!raw) return false;
+            const obj = JSON.parse(raw);
+            if (!obj || obj.v !== 1) return false;
+            const baselineLen = Array.isArray(obj.baseline) ? obj.baseline.length : 0;
+            const overridesLen = Array.isArray(obj.overrides) ? obj.overrides.length : 0;
+            return baselineLen > 0 || overridesLen > 0;
+        } catch (e) { return false; }
+    }
 
     let loadingPromise = null;
 
@@ -250,6 +275,37 @@
         }
         .t-inline-editor button.confirm { border-color: #6c6; }
         .t-inline-editor button.cancel  { border-color: #c66; }
+
+        /* Activation banner: shown above the flat edit view when the active
+           locale hasn't been activated this session (Import / Start new /
+           Recover-from-cache). The ✏️ buttons stay hidden until the user
+           explicitly opts into one of those paths. */
+        .t-activation-banner {
+            margin: 8px 0 12px;
+            padding: 12px 14px;
+            background: rgba(220, 200, 100, 0.10);
+            border: 1px solid rgba(220, 200, 100, 0.40);
+            border-left: 4px solid #d68a8a;
+            border-radius: 4px;
+            font-size: 13px;
+            color: var(--fg, #ddd);
+            line-height: 1.5;
+        }
+        .t-activation-banner .t-banner-title { font-weight: 700; margin-bottom: 6px; color: #d68a8a; }
+        .t-activation-banner .t-banner-body { opacity: 0.9; margin-bottom: 10px; font-size: 12px; }
+        .t-activation-banner .t-banner-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+        .t-activation-banner .t-banner-actions button {
+            padding: 4px 10px;
+            background: rgba(120, 180, 255, 0.10);
+            border: 1px solid rgba(120, 180, 255, 0.30);
+            border-radius: 4px;
+            color: inherit;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .t-activation-banner .t-banner-actions button:hover {
+            background: rgba(120, 180, 255, 0.22);
+        }
         `;
         const styleEl = document.createElement('style');
         styleEl.textContent = css;
@@ -276,6 +332,19 @@
             uploadLabel.appendChild(uploadText);
             uploadLabel.appendChild(uploadInput);
             ops.appendChild(uploadLabel);
+
+            // Start new translation (downloads a synthetic blank baseline +
+            // activates the locale for editing, so users without an existing
+            // translation file can still bootstrap the file-centric flow).
+            const newBtn = document.createElement('button');
+            newBtn.id = 't-start-new';
+            newBtn.className = 'ctrl t-ctrl';
+            newBtn.type = 'button';
+            newBtn.dataset.i18n = 'tr.startNew';
+            newBtn.dataset.i18nTitle = 'tr.startNew.tip';
+            newBtn.textContent = '📋 Start new translation';
+            newBtn.addEventListener('click', onStartNew);
+            ops.appendChild(newBtn);
 
             // Download
             const dlBtn = document.createElement('button');
@@ -399,6 +468,9 @@
             withTranslation: parsed.stats.withTranslation,
         }, { source: parsed.source }); // 預設清掉 overrides（完全替代語意）
 
+        // Importing a file activates this locale's editing.
+        activateLocale(activeLocale);
+
         // Restore translator notes if the imported file carries a Notes column.
         const notesRestored = restoreNotesFromSource(parsed.source);
         if (notesRestored) {
@@ -452,8 +524,131 @@
         }));
         if (!proceed) return;
         if (ts) ts.reset();
+        STATE.activatedLocales.delete(activeLocale);
         updateStats();
         if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+    }
+
+    // ----- Start new / Recover from cache -----
+
+    function onStartNew() {
+        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+        if (!activeLocale) { alert(t('tr.alert.pickLocale')); return; }
+        if (isSourceLocale(activeLocale)) {
+            alert(t('tr.alert.sourceLocaleStartNew', { locale: activeLocale }));
+            return;
+        }
+        if (typeof LocWriter === 'undefined') { console.error('LocWriter missing'); return; }
+
+        const synth = buildSyntheticSource(activeLocale);
+        if (!synth) { alert(t('tr.alert.noBaseline')); return; }
+
+        // If existing cache has work, confirm before discarding.
+        if (hasCacheForLocale(activeLocale)) {
+            const proceed = confirm(t('tr.confirm.startNewWithCache', { locale: activeLocale }));
+            if (!proceed) return;
+        }
+
+        // Clear any existing state for this locale and seed a fresh baseline
+        // backed by the synthetic source structure (so future Exports preserve
+        // the v2 LocKit format without re-walking the AST).
+        const ts = getOrCreateState(activeLocale);
+        if (ts) ts.reset();
+        const ts2 = getOrCreateState(activeLocale);
+        ts2.replaceBaseline(new Map(), {
+            fileName: synth.fileName,
+            importedAt: new Date().toISOString(),
+            totalRows: synth.rows.length,
+            withTranslation: 0,
+        }, { source: synth });
+
+        // Hand the user the bootstrap file immediately so they have something
+        // to import next session.
+        try {
+            const result = LocWriter.writeLocFile(synth, new Map(), {});
+            const blob = result.payload instanceof Blob
+                ? result.payload
+                : new Blob([result.payload], { type: result.mime });
+            downloadBlob(blob, result.filename);
+        } catch (e) {
+            console.warn('[translation-ui] start-new download failed:', e);
+        }
+
+        activateLocale(activeLocale);
+        if (STATE.hooks && STATE.hooks.markExported) STATE.hooks.markExported();
+        updateStats();
+        if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+    }
+
+    function onRecoverFromCache() {
+        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+        if (!activeLocale) return;
+        if (!hasCacheForLocale(activeLocale)) return;
+        // Force-load from localStorage and activate.
+        getOrCreateState(activeLocale);
+        activateLocale(activeLocale);
+        updateStats();
+        if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+    }
+
+    // ----- Activation banner (rendered above the flat edit view) -----
+
+    function injectActivationBanner(container) {
+        if (!container) return;
+        const old = container.querySelector(':scope > .t-activation-banner');
+        if (old) old.remove();
+
+        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+        if (!activeLocale || isSourceLocale(activeLocale)) return;
+        if (isLocaleActivated(activeLocale)) return;
+
+        const banner = document.createElement('div');
+        banner.className = 't-activation-banner';
+
+        const title = document.createElement('div');
+        title.className = 't-banner-title';
+        title.textContent = t('tr.activation.title');
+        banner.appendChild(title);
+
+        const body = document.createElement('div');
+        body.className = 't-banner-body';
+        body.textContent = t('tr.activation.body', { locale: activeLocale });
+        banner.appendChild(body);
+
+        const actions = document.createElement('div');
+        actions.className = 't-banner-actions';
+
+        // Import (re-uses the hidden upload input on the toolbar)
+        const importBtn = document.createElement('button');
+        importBtn.type = 'button';
+        importBtn.dataset.i18n = 'tr.activation.import';
+        importBtn.textContent = t('tr.activation.import');
+        importBtn.addEventListener('click', () => {
+            const input = document.getElementById('t-upload-input');
+            if (input) input.click();
+        });
+        actions.appendChild(importBtn);
+
+        const newBtn = document.createElement('button');
+        newBtn.type = 'button';
+        newBtn.dataset.i18n = 'tr.activation.startNew';
+        newBtn.textContent = t('tr.activation.startNew');
+        newBtn.addEventListener('click', onStartNew);
+        actions.appendChild(newBtn);
+
+        if (hasCacheForLocale(activeLocale)) {
+            const recoverBtn = document.createElement('button');
+            recoverBtn.type = 'button';
+            recoverBtn.dataset.i18n = 'tr.activation.recover';
+            recoverBtn.textContent = t('tr.activation.recover');
+            recoverBtn.addEventListener('click', onRecoverFromCache);
+            actions.appendChild(recoverBtn);
+        }
+
+        banner.appendChild(actions);
+        // Insert right after the node title (first child) so it sits at top.
+        const firstNonBanner = container.firstChild;
+        container.insertBefore(banner, firstNonBanner ? firstNonBanner.nextSibling : null);
     }
 
     // ----- Export-state indicator -----
@@ -555,6 +750,11 @@
         rowEl.dataset.tOriginal = originalText;
         // Edit Mode 才顯示視覺裝飾與 ✏️ 編輯按鈕；非 Edit Mode 只悄悄帶 data 屬性
         if (!STATE.translationMode) return;
+        // File-centric workflow: don't render ✏️ until the user has explicitly
+        // imported / started new / recovered from cache. Keeps localStorage
+        // strictly as a backup rather than active state.
+        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+        if (!isLocaleActivated(activeLocale)) return;
         rowEl.classList.add('t-line');
         if (info.status === 'untranslated') rowEl.classList.add('t-untranslated');
         else if (info.status === 'override') rowEl.classList.add('t-overridden');
@@ -916,8 +1116,15 @@
         lookupLine,
         decorateLine,
         getUidFor,
-        notifyLocaleChange: () => updateStats(),
+        notifyLocaleChange: () => {
+            updateStats();
+            if (STATE.translationMode && STATE.hooks && STATE.hooks.requestRedraw) {
+                STATE.hooks.requestRedraw();
+            }
+        },
         isActive: () => STATE.translationMode,
         refreshExportStatus,
+        injectActivationBanner,
+        isLocaleActivated,
     };
 })(typeof window !== 'undefined' ? window : globalThis);
