@@ -43,8 +43,20 @@
 
 <main class="layout">
   <aside class="sidebar">
-    <!-- Script 選擇放到 sidebar 最上方 -->
+    <!-- UID Searcher：貼一段 UID（{guid}-{nodeIndex}-{srcLine}）後跳到對應 script + node -->
     <div class="sidebar-title">
+      <span data-i18n="sidebar.uidSearch">UID Search</span>
+    </div>
+    <form id="uid-search-form" class="uid-search">
+      <input id="uid-search-input" type="text" autocomplete="off" spellcheck="false"
+        data-i18n-placeholder="sidebar.uidSearch.placeholder"
+        placeholder="Paste UID…">
+      <button id="uid-search-btn" type="submit" class="uid-search-btn"
+        data-i18n-title="sidebar.uidSearch.tip" title="Search">🔍</button>
+    </form>
+    <div id="uid-search-result" class="uid-search-result" hidden></div>
+
+    <div class="sidebar-title sidebar-title-spaced">
       <span data-i18n="topbar.script">Script</span>
     </div>
     <select id="script-select" class="sidebar-select"></select>

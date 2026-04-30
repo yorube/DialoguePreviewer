@@ -225,6 +225,75 @@ body.page-ui-strings #page-dialogue { display: none; }
 }
 .node-filter:focus { outline: 1px solid var(--accent); }
 
+.uid-search {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.uid-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+}
+.uid-search input:focus { outline: 1px solid var(--accent); }
+.uid-search-btn {
+  padding: 4px 8px;
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.uid-search-btn:hover { background: var(--choice-bg); border-color: var(--accent); }
+.uid-search-result {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+}
+.uid-search-result[hidden] { display: none; }
+.uid-search-result.found {
+  border-color: rgba(140, 220, 140, 0.5);
+  background: rgba(140, 220, 140, 0.08);
+}
+.uid-search-result.not-found {
+  color: #c8b078;
+  border-color: rgba(220, 200, 100, 0.45);
+  background: rgba(220, 200, 100, 0.08);
+}
+.uid-search-result.error {
+  color: #d68a8a;
+  border-color: rgba(220, 120, 120, 0.45);
+  background: rgba(220, 120, 120, 0.08);
+}
+.uid-search-result-meta {
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  font-family: ui-monospace, monospace;
+  margin-bottom: 2px;
+}
+.uid-search-result-speaker {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 11px;
+}
+.uid-search-result-text {
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
 .layout {
   flex: 1;
   display: grid;

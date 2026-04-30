@@ -85,6 +85,12 @@
       'compare.editHint': '✏️ Click any non-source cell to edit (Ctrl+Enter saves, Esc cancels). Use 💾 Export above to save to .csv / .xlsx.',
       'compare.openInEdit': 'Edit in this language',
       'sidebar.nodes': 'Nodes',
+      'sidebar.uidSearch': 'UID Search',
+      'sidebar.uidSearch.placeholder': 'Paste UID…',
+      'sidebar.uidSearch.tip': 'Search a UID and jump to the matching script + node.',
+      'uidSearch.invalidUid': 'Invalid UID format.',
+      'uidSearch.notFound': 'Not found.',
+      'uidSearch.guidsUnavailable': 'Could not load the UID lookup table.',
       'panel.vars': 'Variables',
       'panel.source': 'Source',
       'panel.notes': 'Notes',
@@ -260,6 +266,12 @@
       'compare.editHint': '✏️ 點任一非原文欄位即可編輯（Ctrl+Enter 儲存、Esc 取消）。要存檔請用上方 💾 匯出 .csv / .xlsx。',
       'compare.openInEdit': '切到此語言並進入 Edit Mode',
       'sidebar.nodes': '節點清單',
+      'sidebar.uidSearch': 'UID 搜尋',
+      'sidebar.uidSearch.placeholder': '貼上 UID…',
+      'sidebar.uidSearch.tip': '輸入 UID 後跳到對應的劇本與節點。',
+      'uidSearch.invalidUid': 'UID 格式不正確。',
+      'uidSearch.notFound': '找不到。',
+      'uidSearch.guidsUnavailable': '無法載入 UID 對照表。',
       'panel.vars': '變數狀態',
       'panel.source': '原始文本',
       'panel.notes': '筆記',
@@ -671,6 +683,188 @@
       console.info('No bundled manifest:', e.message);
       return false;
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §7b UID Searcher
+  // ─────────────────────────────────────────────────────────────────────────
+  // Paste a UID ({en-US-guid}-{nodeIndex}-{srcLine}); on success the previewer
+  // jumps to the matching script + node and prints the line text in the
+  // currently-active locale beneath the input.
+
+  async function ensureGuidsReverseMap() {
+    if (state.guidsRev) return state.guidsRev;
+    try {
+      const r = await fetch('data/guids.json', { cache: 'no-cache' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      const rev = Object.create(null);
+      for (const [filename, guid] of Object.entries(data)) {
+        // Only en-US filenames are the canonical UID anchor (UIDs are computed
+        // from the en-US guid + en-US nodeIndex). Skip everything else so the
+        // reverse map is unambiguous.
+        if (/\(en-US\)\.json$/i.test(filename)) {
+          rev[guid] = filename;
+        }
+      }
+      state.guidsRev = rev;
+      return rev;
+    } catch (e) {
+      console.error('[uid-search] failed to load guids.json', e);
+      return null;
+    }
+  }
+
+  // Walk a parsed node's statement tree to find the line / option that owns
+  // the given srcLine. Returns { kind, text, speaker? } or null.
+  function findStatementBySrcLine(statements, srcLine) {
+    for (const s of statements || []) {
+      if (!s) continue;
+      if (s.type === 'line' && s.srcLine === srcLine) {
+        return { kind: 'line', text: s.text || '', speaker: formatSpeaker(s) };
+      }
+      if (s.type === 'choices') {
+        for (const item of s.items || []) {
+          if (item.srcLine === srcLine) {
+            return { kind: 'option', text: item.text || '', speaker: '' };
+          }
+          if (item.body) {
+            const r = findStatementBySrcLine(item.body, srcLine);
+            if (r) return r;
+          }
+        }
+      } else if (s.type === 'if') {
+        const r1 = findStatementBySrcLine(s.then, srcLine);
+        if (r1) return r1;
+        if (s.else) {
+          const r2 = findStatementBySrcLine(s.else, srcLine);
+          if (r2) return r2;
+        }
+      }
+    }
+    return null;
+  }
+
+  function setUidSearchResult(state_, message) {
+    const el = $('uid-search-result');
+    if (!el) return;
+    el.hidden = false;
+    el.className = 'uid-search-result ' + state_;
+    el.innerHTML = '';
+    if (typeof message === 'string') {
+      el.textContent = message;
+    } else if (message) {
+      el.appendChild(message);
+    }
+  }
+
+  async function searchByUid(rawInput) {
+    const uid = (rawInput || '').trim();
+    if (!uid) {
+      const el = $('uid-search-result');
+      if (el) el.hidden = true;
+      return;
+    }
+
+    // UID = "{guid}-{nodeIndex}-{srcLine}"; guid may itself contain dashes
+    // (Unity hex formats vary), so anchor on the trailing two integer parts.
+    const m = uid.match(/^(.+)-(\d+)-(\d+)$/);
+    if (!m) {
+      setUidSearchResult('error', t('uidSearch.invalidUid'));
+      return;
+    }
+    const guid = m[1];
+    const nodeIndex = parseInt(m[2], 10);
+    const srcLine = parseInt(m[3], 10);
+
+    const rev = await ensureGuidsReverseMap();
+    if (!rev) {
+      setUidSearchResult('error', t('uidSearch.guidsUnavailable'));
+      return;
+    }
+
+    const enFilename = rev[guid];
+    if (!enFilename) {
+      setUidSearchResult('not-found', t('uidSearch.notFound'));
+      return;
+    }
+
+    const { group } = detectLocale(enFilename);
+    if (!state.groups.has(group)) {
+      setUidSearchResult('not-found', t('uidSearch.notFound'));
+      return;
+    }
+
+    // Switch script if needed. selectGroup() refreshes the locale dropdown
+    // and triggers loadAndShowCurrent which calls ensureLoaded for the active
+    // locale; so by the time it returns, activeProject() is populated.
+    if (state.activeGroup !== group) {
+      $('script-select').value = group;
+      await selectGroup(group);
+    }
+
+    const proj = activeProject();
+    if (!proj) {
+      setUidSearchResult('not-found', t('uidSearch.notFound'));
+      return;
+    }
+
+    // Resolve node title via en-US's authoritative ordering. If the active
+    // locale's JSON happens to be reordered, the title-based lookup below
+    // still gets us to the right node.
+    let nodeTitle = null;
+    try {
+      const enProject = await ensureLoaded(group, 'en-US');
+      nodeTitle = enProject.rawNodes && enProject.rawNodes[nodeIndex] && enProject.rawNodes[nodeIndex].title;
+    } catch (e) {
+      console.warn('[uid-search] en-US load failed, falling back to active locale', e);
+    }
+    if (!nodeTitle) {
+      const rn = proj.rawNodes && proj.rawNodes[nodeIndex];
+      nodeTitle = rn && rn.title;
+    }
+    if (!nodeTitle || !proj.nodes.has(nodeTitle)) {
+      setUidSearchResult('not-found', t('uidSearch.notFound'));
+      return;
+    }
+
+    // Switch to that node (this also sets state.runtime.currentNodeTitle, so
+    // getDisplayedText below picks up overrides for the active locale).
+    startAt(nodeTitle);
+
+    const node = proj.nodes.get(nodeTitle);
+    const hit = findStatementBySrcLine(node.statements, srcLine);
+    if (!hit) {
+      setUidSearchResult('not-found', t('uidSearch.notFound'));
+      return;
+    }
+
+    // Apply imported / inline-edited overrides for the active locale.
+    const disp = getDisplayedText(hit.text, srcLine);
+    const text = disp.text || hit.text;
+
+    const wrap = document.createElement('div');
+    const meta = document.createElement('div');
+    meta.className = 'uid-search-result-meta';
+    meta.textContent = `${state.activeLocale} · ${nodeTitle}`;
+    wrap.appendChild(meta);
+    if (hit.speaker) {
+      const sp = document.createElement('div');
+      sp.className = 'uid-search-result-speaker';
+      sp.textContent = hit.speaker + ':';
+      wrap.appendChild(sp);
+    } else if (hit.kind === 'option') {
+      const sp = document.createElement('div');
+      sp.className = 'uid-search-result-speaker';
+      sp.textContent = '→';
+      wrap.appendChild(sp);
+    }
+    const body = document.createElement('div');
+    body.className = 'uid-search-result-text';
+    body.textContent = text;
+    wrap.appendChild(body);
+
+    setUidSearchResult('found', wrap);
   }
 
   async function ingestFiles(fileList) {
@@ -2139,6 +2333,28 @@
       e.preventDefault(); document.body.classList.remove('dragover');
       if (e.dataTransfer.files.length) ingestFiles(e.dataTransfer.files);
     });
+
+    // UID Searcher (sidebar). Submit jumps to the matching script + node and
+    // prints the line beneath the input. Empty submissions clear the result.
+    const uidForm = $('uid-search-form');
+    const uidInput = $('uid-search-input');
+    if (uidForm && uidInput) {
+      uidForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        searchByUid(uidInput.value).catch(err => {
+          console.error('[uid-search]', err);
+          setUidSearchResult('error', err.message || String(err));
+        });
+      });
+      // Clear the result the moment the input is emptied so stale messages
+      // don't linger after the translator deletes the text.
+      uidInput.addEventListener('input', () => {
+        if (!uidInput.value.trim()) {
+          const el = $('uid-search-result');
+          if (el) el.hidden = true;
+        }
+      });
+    }
 
     // Top-bar selectors.
     $('script-select').addEventListener('change', e => selectGroup(e.target.value));
