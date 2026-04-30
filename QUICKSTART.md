@@ -1,126 +1,144 @@
-# Quick Start for Translators
+# Translator Reference
 
-Welcome! This is a one-page primer for using the **MBU Dialogue Previewer** to translate the game. You don't need to install anything — just open the link in any modern desktop browser (Chrome, Edge, Firefox, Safari).
-
-> **The single most important rule.** Your work is saved in your browser as you edit, but the **only safe long-term save is the file you press 💾 Export to download.** Always export before closing the tab, and re-import the file the next time you sit down to keep going. Treat the browser cache as scratch paper, not a save slot.
+Internal reference for translators using the MBU Dialogue Previewer. Rules, scenarios, and the things that go wrong in real workflows.
 
 ---
 
-## 1. The two pages
+## Hard rules
 
-At the very top of the screen there are two tabs:
-
-| Tab | What it's for |
-| --- | --- |
-| **💬 Dialogue** | All in-game spoken lines and player choices, organised by script and node. |
-| **🧩 UI Strings** | Item names, sign descriptions, menu copy — the short UI text the team ships as a multi-sheet `.xlsx`. |
-
-Both pages save independently and have their own Import / Export. Switch between them as needed; your selection is remembered after a refresh.
+1. **`en-US` and `zh-TW` are source languages — never editable.** If you "translate" something while either is set as the Text language, your edits go nowhere. Always set the Text language to your target locale (`fr-FR`, `ja-JP`, `ru-RU`, `it-IT`, `es-ES`, `zh-CN`) before editing.
+2. **The exported file is the only real save.** Browser-stored progress is not durable — Safari clears it after 7 days idle, switching browsers / computers loses it, clearing site data wipes it, the browser may evict it on its own when storage is tight. Press 💾 Export every session and keep the file.
+3. **Importing fully replaces that language's state.** If you import `Loc_fr-FR.csv`, every existing French baseline + every inline edit you made for French is overwritten by the file. Nothing merges. Other languages are untouched. Export before importing if you have unsaved edits.
+4. **Edit Mode and Compare Mode can't be on at the same time.** Turning either on turns the other off. The dialogue area only shows one of: runtime preview / flat editing view / comparison table.
+5. **`//`-prefixed rows in the UI Strings file are section headers, not data.** They show up as banners. Don't put real keys behind a `//`. Their other-language cells are not edited or saved.
+6. **Two pages, two separate files.** The 💬 Dialogue page and the 🧩 UI Strings page each have their own Import / Export. They don't share state. Switching tabs doesn't lose work on the other side.
 
 ---
 
-## 2. Translating dialogue (the 💬 Dialogue page)
+## Workflow — Dialogue page
 
-### 2.1 First-time setup
-1. **Pick your target language.** Top-right of the screen, **Text language** dropdown. Choose your locale (e.g. `fr-FR`, `ja-JP`, `ru-RU`). This is the only language that will accept your edits.
-2. **Pick the script** in the left sidebar — they're listed in story order (tutorial → Day 1 → Day 2 → … → epilogues → cross-day side dialogues).
-3. **(Optional) Import a translation file.** If your team gave you a partially-filled `.csv` / `.xlsx`, click **📥 Import translation file** in the top toolbar. The file fully replaces this language's current state.
-4. If you don't have a starter file, just start editing — the tool will generate a fresh export for you when you're done.
+### Setting up
+1. **Text language** dropdown (top-right) → pick your target locale.
+2. **Script** dropdown (left sidebar) → scripts are listed in story order: tutorial → 主角家 → 第一日 → 第二日 (早/工/歸) → 第三日 → 第四日 → 第五日 → 後日談 → 異常後日談 → 跨日對話 (支線/路人/街景).
+3. **📥 Import translation file** — load the file the team last sent you. Replaces this language's state.
+4. If you have no starter file, just start editing — Export will generate one for you.
 
-### 2.2 Editing in context — ✏️ Translation Edit Mode
-This is the everyday editing flow.
+### Editing in context — ✏️ Translation Edit Mode
+This is the main editing flow.
 
-1. With a target language selected (not `en-US` or `zh-TW` — those are source languages), click **✏️ Translation Edit Mode** above the dialogue area. Click the **?** next to it for the full guide.
-2. The dialogue panel switches to a **flat editing view**: the entire current node — every line, every option, every `<<if>>` branch — is laid out top-to-bottom on one scrollable page.
-3. Hover any line → click the **✏️** icon → a textarea opens. Type your translation, then `Ctrl/Cmd + Enter` to save (or `Esc` to cancel).
-4. **Goto labels are clickable.** When you see `goto someLabel`, click it; the view scrolls to the matching `@someLabel` (even if it's in another node) and flashes briefly. Useful for following branches without losing your place.
-5. **Symbols you'll see:**
-   - `→ 1.`, `→ 2.` — player choice options. The indented block under each one is what plays after that choice.
-   - `«if $cond»` … `«endif»` — a conditional branch. **Both branches are always shown** so nothing slips through; the dashed indent on the left tells you what's nested.
-   - `@labelName` — a jump target. Other lines may `goto` here.
-   - `— end —` (red badge) — the dialogue ends at that point. Anything below in the same indent isn't reachable from this branch.
-   - Dim grey monospace lines (`set $foo = 1`, `wait 0.5s`, `→ goto X`) are runtime side-effects shown for context. Not editable.
+1. With your target locale selected, click **✏️ Translation Edit Mode** above the dialogue area. Click the **?** next to it for the symbol legend.
+2. The dialogue panel switches to a **flat editing view**: every line, every choice option, every `«if»` branch of the current node is laid out top-to-bottom. You sweep through it instead of clicking choices.
+3. Hover any line → click **✏️** → textarea opens. `Ctrl/Cmd + Enter` saves, `Esc` cancels.
+4. **All branches are shown.** Even if `«if cond»` and `«else»` are mutually exclusive at runtime, both branches need translating — the game ships both.
+5. **`goto labelName` is clickable.** It scrolls to the matching `@labelName`. If the label is in another node, the previewer switches nodes and scrolls. The destination flashes yellow so you can see it land.
+6. **`— end —`** (red badge) means the dialogue ends there. Anything below it in the same indent is unreachable from that branch.
+7. **Dim grey monospace lines** (`set $foo = 1`, `wait 0.5s`) are runtime side-effects shown for context. Not translatable.
 
-### 2.3 Side-by-side review — 📊 Compare languages
-1. Right next to the Edit Mode toggle, click **📊 Compare languages** to swap the dialogue panel for a multi-language comparison table.
-2. You'll see one row per translatable line / option in the current node, one column per locale (`en-US`, `zh-TW`, plus every translation).
-3. Click any **non-source** cell to edit it directly. Saving writes back to that locale's translation immediately. You can edit any language from here, not only the active one in the dropdown.
-4. The active-language column is highlighted; source columns (`en-US`, `zh-TW`) have a slightly darker background and aren't editable.
-5. Press **Esc** to leave Compare Mode. Compare Mode and Edit Mode are mutually exclusive — turning either on will turn the other off.
+### Side-by-side review — 📊 Compare languages
+1. Click **📊 Compare languages** (next to the Edit Mode toggle) to swap the dialogue area for a comparison table of the active node.
+2. One row per line / option, one column per available language.
+3. **Click any non-source cell** (anything except the `en-US` / `zh-TW` columns) to edit it directly. You can edit any language from here, not only the one in the Text-language dropdown.
+4. Press **Esc** to leave Compare Mode.
 
-### 2.4 Translator notes
-1. Click **📝 Note** in the toolbar (or the **Notes** tab in the source panel) to attach a free-form note to the current node.
-2. Notes save automatically as you type. Nodes that have a note show 📝 in the sidebar.
-3. Notes travel inside your exported `.csv` / `.xlsx` (Notes column), so they work across browsers, machines, and translators.
+### Translator notes
+1. **📝 Note** in the dialogue toolbar opens a free-form note for the current node.
+2. Saves automatically as you type. Nodes that have a note show 📝 in the sidebar.
+3. Notes ride along inside the exported file (in the `Notes` column), so they travel with the file across machines / browsers / translators. They don't travel through the browser cache alone.
 
-### 2.5 Exporting your work
-1. Click **💾 Export translation file** in the top toolbar.
-2. You'll get a `.csv` in Unity v2 LocKit format (`Type | Gender | CharacterName | en-US | <locale> | ID | FileName | NodeTitle | Notes`).
-3. **Send this file to the team. Keep a copy.** Next time, re-import it so you don't lose progress.
-
-The status pill at the top of the screen reads **✓ Saved Nm ago** when everything is exported, or **⚠️ Unexported edits** when you have local changes that aren't in any file yet. Closing the tab while dirty triggers a browser confirmation prompt.
+### Export
+1. **💾 Export translation file** downloads a `.csv`.
+2. Send the file to the team. **Keep a copy locally.** Next session, re-import it to keep going.
+3. The status pill at the top reads **✓ Saved Nm ago** (clean) or **⚠️ Unexported edits** (dirty). If you close the tab while dirty, the browser will warn you. Trust the warning.
 
 ---
 
-## 3. Translating UI text (the 🧩 UI Strings page)
+## Workflow — UI Strings page
 
-This page is for the multi-sheet `翻譯對照表 (*).xlsx` the team uses for item names, sign descriptions, and other short UI copy.
+For the multi-sheet `翻譯對照表 (*).xlsx` (item names, sign descriptions, menu copy, character names, …).
 
-1. **📥 Import .xlsx** in the top toolbar. The whole workbook (all sheets, all rows) loads at once.
-2. Sheet tabs appear across the top — one per category (`流程調查物件`, `常態調查物件`, `互動`, `任務`, `角色`, `章節`, `其它`, `人員名單`). Click a tab to switch.
-3. Each sheet is a comparison table: `Key | zh-TW | zh-CN | en-US | ja-JP | it-IT | ru-RU | es-ES | fr-FR`. **Click any cell** (any language) to edit; `Ctrl/Cmd + Enter` saves, `Esc` cancels.
-4. Rows whose Key starts with `//` (e.g. `//第一日`) are visual section headers — they render as full-width banners and aren't editable.
-5. Use the **filter box** to narrow rows by Key.
-6. **💾 Export .xlsx** rebuilds the workbook with your edits, keeping every original sheet, column, and row intact. Round-trip safe — send this file back to the team.
+1. **📥 Import .xlsx** — loads the whole workbook. Replaces any UI Strings work currently in the browser.
+2. **Sheet tabs** across the top mirror the Excel sheet order (流程調查物件 / 常態調查物件 / 互動 / 任務 / 角色 / 章節 / 其它 / 人員名單). Click to switch.
+3. **Click any cell** to edit (any language column — UI Strings has no source-locked language). `Ctrl/Cmd + Enter` saves, `Esc` cancels.
+4. **Filter** narrows visible rows by Key within the active sheet only. Switching sheets clears the filter.
+5. **💾 Export .xlsx** rebuilds the workbook with your edits. Sheet order, column order, every original row (including the `//` divider rows) are preserved exactly. Send this back to the team — it can be re-uploaded as-is next session.
+6. **🗑 Clear** drops everything from the browser cache. Only do this after exporting.
 
 ---
 
-## 4. Keyboard shortcuts (Dialogue page)
+## What is durable, what is not
+
+| What | Where | Survives a refresh? | Survives 7+ days idle? | Survives a browser switch? |
+| --- | --- | --- | --- | --- |
+| Imported file + your inline edits | Browser cache | Yes | **No** (Safari ITP, eviction) | **No** |
+| Translator notes | Browser cache | Yes | **No** | **No** |
+| UI Strings workbook + edits | Browser cache | Yes | **No** | **No** |
+| **Exported `.csv` / `.xlsx`** | **The file you saved** | **Yes** | **Yes** | **Yes** |
+
+Translation: **Export every session.** The file is the only thing you can rely on long-term.
+
+---
+
+## Common scenarios
+
+### "I see the English source instead of my translation"
+The Text language dropdown is on `en-US` (or `zh-TW`). Switch to your target locale. The source languages are intentionally not overrideable; you're seeing the source because the previewer treats it as un-translatable.
+
+### "Export doesn't seem to do anything / says 'no baseline'"
+You're on a source locale. Switch to a target locale and try again. If you're already on a target locale and have never imported a file, edit at least one line first — Export needs something to package.
+
+### "Import warns 'detected locale X but you selected Y'"
+The file's locale doesn't match the dropdown. Usually one of them is wrong. Cancel, fix, retry.
+
+### "The pill says ⚠️ Unexported edits but I don't think I changed anything"
+Some action — a one-character edit, a note added — marked the state dirty. Press 💾 Export anyway; the pill flips to clean afterwards. If you genuinely don't want to save, **🔁 Reset this language** wipes back to bundled defaults (destructive, no undo).
+
+### "I refreshed / closed the tab and my work is gone"
+- If you didn't export and the cache was cleared (Safari ITP, manual clear, browser switch) — the work is gone. Re-import your last exported file and continue.
+- If the cache wasn't cleared, the work is still there. Just keep editing.
+
+### "Edit Mode looks the same as before"
+You're probably on a source locale. Switch to your target locale and toggle Edit Mode again — the ✏️ buttons only appear for editable rows.
+
+### "Compare Mode shows `!` or `— missing —` in some columns"
+That language's source data couldn't load (network blip, missing locale file). Other columns still work. Refresh the page and try again; if it persists, tell the team.
+
+### "Browser says storage is full"
+You've accumulated too much in the cache (multiple languages with full baselines). Export everything you care about, then use **🔁 Reset this language** on locales you're not actively touching.
+
+### "The file the team sent me won't import"
+The previewer reads two formats:
+- Dialogue: a CSV/xlsx with columns roughly `Type / Gender / CharacterName / en-US / <locale> / ID / FileName / NodeTitle / Notes` (Unity v2 LocKit format).
+- UI Strings: the multi-sheet `翻譯對照表` xlsx with `Key | zh-TW | zh-CN | en-US | …` columns.
+
+Anything else won't import — ask the team to convert it.
+
+---
+
+## Things to keep intact while translating
+
+- **`{$variableName}` markers in dialogue lines.** These are runtime substitutions — the game replaces them with the actual value (player name, item name, count, etc.). Leave them exactly as-is, including the `$` and the curly braces. Spacing around them: keep what the source has.
+- **Markup tags.** `<color=#xxxxxx>...</color>`, `<i>...</i>`, `<b>...</b>`, `<size=N>...</size>`, `<y>...</y>` (warm yellow), `<s>...</s>` (whisper italic), `<sup>` / `<sub>`, `<mark=#xxxxxx>...</mark>`. Keep the tags around the same words. Rearranging where the tagged span sits in the sentence is fine; deleting tags removes the visual effect; mistyping the closing tag breaks the rest of the line on screen.
+- **Speaker names** in dialogue do not need to be translated through this tool — they come from a separate character-name table maintained by the team. Translate the line text, leave the `Speaker:` prefix alone.
+- **Goto / label names** (`@labelName`, `goto labelName`) are identifiers, not visible text. Don't translate them. They don't appear in the exported file anyway.
+
+---
+
+## Keyboard shortcuts (Dialogue page)
 
 | Key | Action |
 | --- | --- |
 | `Space` / `Enter` | Advance one line |
 | `1`–`9` | Pick the corresponding option |
-| `R` | Replay the current node from the top |
+| `R` | Replay current node from the top |
 | `←` / `Backspace` | Step back one line |
-| `Ctrl/Cmd + Enter` | Save an inline edit |
-| `Esc` | Cancel an inline edit / exit Compare Mode |
+| `Ctrl/Cmd + Enter` | Save inline edit |
+| `Esc` | Cancel inline edit / exit Compare Mode |
+
+Shortcuts are off while typing in any input / textarea.
 
 ---
 
-## 5. Things that are saved (and things that aren't)
+## In-app help
 
-**Saved in your browser** until you clear it:
-- Imported translation file (baseline) and your inline edits
-- Translator notes
-- UI Strings workbook + edits
-- Source font size, splitter widths, interface language, last active page
-
-**Not saved across reloads:**
-- Which script / node / language was active
-- Edit Mode / Compare Mode toggles
-- Variable overrides on the right-hand panel
-
-**Always lost without an export:**
-- Anything, if you switch browsers / computers, clear site data, or use Safari for more than 7 days without revisiting (Safari's ITP automatically clears localStorage).
-
-So: **export early, export often.** The file you download is the truth.
-
----
-
-## 6. Where to find help in the app
-
-- The **?** button at the top-right opens the global help (overview of every feature).
-- Inside Translation Edit Mode, a **?** sits next to the toggle — that one is dedicated to Edit Mode mechanics (flat-view symbols, the inline editor, clickable goto labels).
-- This document covers the workflow; the in-app help covers the details.
-
----
-
-## 7. If something looks wrong
-
-1. Check the **Text language** dropdown in the top-right. Most "I see English instead of my translation" issues are because the dropdown is set to `en-US`, which is the source language and intentionally not editable.
-2. If you've edited but the indicator is still **⚠️ Unexported edits**, you haven't yet downloaded the file — press **💾 Export** before closing.
-3. If the page is blank or loading forever, refresh once. Your work is held in localStorage, so a refresh won't lose anything you typed.
-4. Anything stranger than that, send a screenshot + a description (which page, which node, which language, what you clicked) to the team.
-
-Happy translating!
+- Top-right **?** — overview of every feature.
+- **?** next to the Edit Mode toggle — Edit Mode specifics: flat view symbols, the inline editor, clickable goto labels.
