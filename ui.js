@@ -89,6 +89,7 @@
       // ----- Translation Edit Mode -----
       'tr.editMode': '✏️ Translation Edit Mode',
       'tr.editMode.tip': 'Enable to inline-edit translations on the dialogue preview. Edits are saved in your browser only.',
+      'tr.editMode.help.tip': 'Open the Edit Mode help (flat view symbols, ✏️ inline editor, clickable goto labels, …)',
       'tr.upload': '📥 Import translation file',
       'tr.upload.tip': 'Import your filled .csv / .xlsx — fully replaces the current language with the new file.',
       'tr.download': '💾 Export translation file',
@@ -138,13 +139,28 @@
   <li><b>⟳ Replay this node</b> restarts from the top. <b>← Step back</b> rewinds one line. The <b>↶</b> on each line jumps the runtime back to that point.</li>
 </ul>
 
-<h3>Edit translations (✏️ Edit Mode)</h3>
+<h3 id="help-section-editmode">Edit translations (✏️ Edit Mode)</h3>
+<p><b>Toggle:</b> Pick a target language (not en-US) in the top bar, then click <b>✏️ Translation Edit Mode</b> above the dialogue. Toggle off to return to the runtime preview — edits show up there too.</p>
+<p><b>What you see:</b> the dialogue panel switches to a <b>flat editing view</b> that expands the entire current node — every line, every option, every <code>&lt;&lt;if&gt;&gt;</code> branch — into one scrollable page so you can sweep through it top-to-bottom instead of clicking through dialogue choices.</p>
+
+<p><b>Edit a line:</b></p>
 <ul>
-  <li>Pick a <b>target language</b> (not en-US) in the top bar, then toggle <b>✏️ Translation Edit Mode</b> above the dialogue.</li>
-  <li>The dialogue panel switches to a <b>flat editing view</b> showing every line, every option, and every <code>&lt;&lt;if&gt;&gt;</code> branch of the current node.</li>
-  <li>Click <b>✏️</b> on any line / option, type the translation, save with <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> (or click ✓). Cancel with <kbd>Esc</kbd>.</li>
-  <li>Toggle Edit Mode off to return to the runtime preview — your edits show up there too.</li>
+  <li>Hover any line or option → click the <b>✏️</b> icon → an inline editor opens.</li>
+  <li>Save with <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> or the <b>✓</b> button. Cancel with <kbd>Esc</kbd> or <b>✗</b>.</li>
+  <li><code>{$variable}</code> tokens are kept as-is — leave them in the right place inside your translation; the runtime substitutes the value at play time.</li>
 </ul>
+
+<p><b>Symbols you'll see in flat view:</b></p>
+<ul>
+  <li><span style="color:#88c8ff;font-weight:600">→ 1.</span>, <span style="color:#88c8ff;font-weight:600">→ 2.</span> … — choice options. Indent below them is the option's body (what plays when the player picks it).</li>
+  <li><span style="color:#c8a878;font-family:monospace">«if $cond»</span> … <span style="color:#c8a878;font-family:monospace">«endif»</span> — conditional branch. Everything inside only plays when <code>$cond</code> is true. <b>All branches are shown</b> so nothing is missed in translation; the dashed indent on the left tells you what's nested.</li>
+  <li><span style="color:#88e088">@labelName</span> — a jump target. Other lines may <code>goto</code> here.</li>
+  <li><span style="color:#88c8ff;text-decoration:underline">goto labelName</span> / <span style="color:#88c8ff;text-decoration:underline">condGoto labelName (cond)</span> — <b>clickable!</b> Click the underlined label and the view scrolls to that <code>@labelName</code>. If the label lives in another node, the previewer switches to that node first, then scrolls. The destination row briefly flashes yellow so you can spot it.</li>
+  <li><span style="color:#d68a8a;font-weight:700;border:1px solid #d68a8a;padding:2px 6px;border-radius:3px">— end —</span> — the dialogue ends here. Hover for tooltip. Anything below this in the same indent isn't reachable from here.</li>
+  <li><span style="opacity:0.6;font-family:monospace">set $foo = 1</span>, <span style="opacity:0.6;font-family:monospace">wait 0.5s</span> — runtime side-effects shown as dim metadata. Not editable; provided as context so you understand what the line above / below does.</li>
+</ul>
+
+<p><b>Save / portability:</b> edits are cached in your browser's localStorage as a session backup. The <b>file you press 💾 Export</b> is the canonical save — keep that file safe. localStorage can be cleared by Safari (after 7 days), by clearing site data, or by switching browsers / computers, so don't rely on it for long-term storage.</p>
 
 <h3>Import / Export</h3>
 <ul>
@@ -219,6 +235,7 @@
       // ----- 翻譯編輯模式 -----
       'tr.editMode': '✏️ 翻譯編輯模式',
       'tr.editMode.tip': '開啟後，可以在對話預覽上點 ✏️ 直接修改該句譯文。所有改動只存在你的瀏覽器內。',
+      'tr.editMode.help.tip': '打開 Edit Mode 說明(攤平視圖符號、✏️ 編輯器、可點 goto 等等)',
       'tr.upload': '📥 匯入翻譯檔',
       'tr.upload.tip': '匯入填好的 .csv / .xlsx — 會「整個替換」當前語言為新檔內容。',
       'tr.download': '💾 匯出翻譯檔',
@@ -268,13 +285,28 @@
   <li><b>⟳ 從本節點重看</b> 從頭重來。<b>← 退一行</b> 倒回上一行。每行尾的 <b>↶</b> 可以直接跳回那個位置。</li>
 </ul>
 
-<h3>編輯翻譯(✏️ Edit Mode)</h3>
+<h3 id="help-section-editmode">編輯翻譯(✏️ Edit Mode)</h3>
+<p><b>切換:</b> 先把 <b>文本語言</b> 切到目標語言(不要選 en-US),再按對話面板上方的 <b>✏️ 翻譯編輯模式</b>。關掉 Edit Mode 會回到 runtime 預覽,你的編輯會直接套上去。</p>
+<p><b>看到什麼:</b> 對話區會切成 <b>攤平編輯視圖</b>,把目前 node 整個展開 — 每一行、每個選項、所有 <code>&lt;&lt;if&gt;&gt;</code> 分支都列出來成一張可捲動清單,讓你由上到下掃過去翻,而不用反覆點選項追路徑。</p>
+
+<p><b>編輯一行:</b></p>
 <ul>
-  <li>先把 <b>文本語言</b> 切到目標語言(不要選 en-US),再按對話面板上方的 <b>✏️ 翻譯編輯模式</b>。</li>
-  <li>對話區會切到 <b>攤平編輯視圖</b>,把目前 node 的每一行、每個選項、以及所有 <code>&lt;&lt;if&gt;&gt;</code> 分支全部展開。</li>
-  <li>點任何行 / 選項旁的 <b>✏️</b>,輸入翻譯,按 <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd>(或點 ✓)儲存。<kbd>Esc</kbd> 取消。</li>
-  <li>關掉 Edit Mode 回到 runtime 預覽 — 你剛剛的編輯會直接套上去。</li>
+  <li>滑鼠移到任一行或選項 → 點 <b>✏️</b> → 出現內聯編輯器。</li>
+  <li><kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> 或 <b>✓</b> 儲存,<kbd>Esc</kbd> 或 <b>✗</b> 取消。</li>
+  <li><code>{$variable}</code> 之類變數標記要保留原樣(只能搬位置不能刪),runtime 會在播放時把值代入。</li>
 </ul>
+
+<p><b>攤平視圖裡的符號:</b></p>
+<ul>
+  <li><span style="color:#88c8ff;font-weight:600">→ 1.</span>、<span style="color:#88c8ff;font-weight:600">→ 2.</span> … — 玩家可選的選項。下方有縮排的就是該選項被選中後執行的內容。</li>
+  <li><span style="color:#c8a878;font-family:monospace">«if $條件»</span> … <span style="color:#c8a878;font-family:monospace">«endif»</span> — 條件分支。中間的內容只在 <code>$條件</code> 成立時播放。<b>所有分支都會列出來</b>,確保翻譯不漏;左側虛線縮排告訴你哪些是巢狀的。</li>
+  <li><span style="color:#88e088">@標籤名稱</span> — 跳轉目標,其他地方可能會 <code>goto</code> 過來。</li>
+  <li><span style="color:#88c8ff;text-decoration:underline">goto 標籤名稱</span> / <span style="color:#88c8ff;text-decoration:underline">condGoto 標籤名稱 (cond)</span> — <b>可以點!</b> 點下底線文字會自動 scroll 到對應的 <code>@標籤名稱</code>。如果標籤在別的 node,預覽器會自動切到那個 node 再 scroll 過去。目標行會閃一下黃光,讓你一眼看到位置。</li>
+  <li><span style="color:#d68a8a;font-weight:700;border:1px solid #d68a8a;padding:2px 6px;border-radius:3px">— end —</span> — 對話到這裡結束(滑鼠停上去看 tooltip)。同一縮排下面的內容從這條路徑走不到。</li>
+  <li><span style="opacity:0.6;font-family:monospace">set $foo = 1</span>、<span style="opacity:0.6;font-family:monospace">wait 0.5s</span> — runtime 副作用,以淡灰色 monospace 顯示;不能編輯,純粹給譯者了解上下文。</li>
+</ul>
+
+<p><b>存檔與可攜性:</b> 編輯會即時 cache 到瀏覽器 localStorage 當 session 備份。但**唯一可信的存檔是按 [💾 匯出翻譯檔] 拿到的那個 CSV**。localStorage 可能被 Safari(7 天 ITP)/ 清除網站資料 / 換瀏覽器 / 換電腦清掉,別把它當長期存檔。</p>
 
 <h3>匯入 / 匯出</h3>
 <ul>

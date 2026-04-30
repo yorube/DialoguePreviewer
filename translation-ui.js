@@ -312,7 +312,7 @@
             ops.appendChild(expStatus);
         }
 
-        // 對話介面最上方：Edit Mode toggle
+        // 對話介面最上方：Edit Mode toggle + 旁邊的 ? 說明按鈕
         const modebar = document.getElementById('dialogue-modebar');
         if (modebar) {
             const toggle = document.createElement('button');
@@ -324,6 +324,29 @@
             toggle.textContent = '✏️ Translation Edit Mode';
             toggle.addEventListener('click', toggleMode);
             modebar.appendChild(toggle);
+
+            // ? — opens the global help modal scrolled to the Edit Mode section
+            // (so the symbols specific to flat view — «if» / «end» / clickable
+            // goto labels — are explained in context, without duplicating the
+            // content into a second modal).
+            const help = document.createElement('button');
+            help.id = 't-mode-help';
+            help.className = 'help-btn t-mode-help';
+            help.type = 'button';
+            help.textContent = '?';
+            help.dataset.i18nTitle = 'tr.editMode.help.tip';
+            help.title = '?';
+            help.addEventListener('click', () => {
+                const overlay = document.getElementById('help-overlay');
+                if (!overlay) return;
+                overlay.hidden = false;
+                // wait for layout, then scroll to the Edit Mode section
+                requestAnimationFrame(() => {
+                    const target = document.getElementById('help-section-editmode');
+                    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+            });
+            modebar.appendChild(help);
         }
     }
 
