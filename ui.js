@@ -1721,18 +1721,17 @@
     return out;
   }
 
-  // Build a Map<srcLine, { text, kind, speaker }> for one locale's same-titled
-  // node, used to align rows by srcLine across locales when structure differs
-  // (extra blank lines, comments, etc.).
-  function buildLocaleSrcLineMap(project, nodeTitle) {
-    const map = new Map();
-    if (!project || !nodeTitle) return map;
+  // Flatten one locale's same-titled node into the same shape as
+  // flattenComparableEntries(en-US) so we can align rows position-by-position
+  // across locales. We can't use srcLine for alignment because some locales
+  // (notably zh-TW / zh-CN / ja-JP) have extra blank lines in the body
+  // string, shifting srcLine even though the AST shape is identical to
+  // en-US's. Returns null when the locale has no matching node at all.
+  function localeFlatEntries(project, nodeTitle) {
+    if (!project || !nodeTitle) return null;
     const node = project.nodes && project.nodes.get(nodeTitle);
-    if (!node) return map;
-    for (const e of flattenComparableEntries(node)) {
-      if (e.srcLine != null) map.set(e.srcLine, e);
-    }
-    return map;
+    if (!node) return null;
+    return flattenComparableEntries(node);
   }
 
   function isSourceLocaleForCompare(loc) {
@@ -1863,9 +1862,13 @@
       return;
     }
 
-    const localeMaps = new Map();
+    // Position-aligned flatten of every locale's same-titled node. Index N in
+    // each array corresponds to the Nth translatable entry — same line across
+    // all languages. Cannot align by srcLine because body line counts drift
+    // between locales (CJK locales pad extra blank lines).
+    const localeEntries = new Map();
     for (const r of loadResults) {
-      localeMaps.set(r.locale, r.project ? buildLocaleSrcLineMap(r.project, nodeTitle) : null);
+      localeEntries.set(r.locale, localeFlatEntries(r.project, nodeTitle));
     }
 
     // Resolve nodeIndex once for UID computation (en-US is the canonical UID
@@ -1908,7 +1911,8 @@
 
     // ── Body ───────────────────────────────────────────────────────────────
     const tbody = document.createElement('tbody');
-    for (const entry of entries) {
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
       const tr = document.createElement('tr');
       tr.className = 'compare-row compare-row-' + entry.kind;
 
@@ -1951,8 +1955,11 @@
           continue;
         }
 
-        const localeMap = localeMaps.get(r.locale);
-        const localeEntry = localeMap ? localeMap.get(entry.srcLine) : null;
+        // Align by AST position (i), not srcLine, because some locales
+        // (zh-TW / zh-CN / ja-JP) have body strings with extra blank lines
+        // that shift srcLine even though the dialogue tree itself is parallel.
+        const localeArr = localeEntries.get(r.locale);
+        const localeEntry = localeArr ? localeArr[i] : null;
         const fallbackText = localeEntry ? localeEntry.text : '';
 
         let displayedText = fallbackText;
@@ -1983,7 +1990,7 @@
           });
         }
 
-        if (!localeMap && !isSource) {
+        if (!localeArr && !isSource) {
           td.classList.add('compare-cell-untranslated');
           td.textContent = t('compare.missing');
         } else if (!displayedText) {
