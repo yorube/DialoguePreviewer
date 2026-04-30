@@ -325,10 +325,10 @@
             toggle.addEventListener('click', toggleMode);
             modebar.appendChild(toggle);
 
-            // ? — opens the global help modal scrolled to the Edit Mode section
-            // (so the symbols specific to flat view — «if» / «end» / clickable
-            // goto labels — are explained in context, without duplicating the
-            // content into a second modal).
+            // ? — opens a dedicated Edit Mode help modal (separate from the
+            // global ? in the top bar). Content is Edit Mode-specific: flat
+            // view symbols, the inline editor flow, clickable goto labels —
+            // things only relevant once you're already in Edit Mode.
             const help = document.createElement('button');
             help.id = 't-mode-help';
             help.className = 'help-btn t-mode-help';
@@ -336,19 +336,69 @@
             help.textContent = '?';
             help.dataset.i18nTitle = 'tr.editMode.help.tip';
             help.title = '?';
-            help.addEventListener('click', () => {
-                const overlay = document.getElementById('help-overlay');
-                if (!overlay) return;
-                overlay.hidden = false;
-                // wait for layout, then scroll to the Edit Mode section
-                requestAnimationFrame(() => {
-                    const target = document.getElementById('help-section-editmode');
-                    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                });
-            });
+            help.addEventListener('click', openEditModeHelp);
             modebar.appendChild(help);
         }
     }
+
+    // ----- Dedicated Edit Mode help modal -----
+
+    function openEditModeHelp() {
+        let overlay = document.getElementById('t-editmode-help-overlay');
+        if (!overlay) overlay = createEditModeHelpModal();
+        overlay.hidden = false;
+        // Reset scroll so opening always lands at the top.
+        const dialog = overlay.querySelector('.help-dialog');
+        if (dialog) dialog.scrollTop = 0;
+    }
+
+    function createEditModeHelpModal() {
+        const overlay = document.createElement('div');
+        overlay.id = 't-editmode-help-overlay';
+        overlay.className = 'help-overlay';
+        overlay.hidden = true;
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+
+        const dialog = document.createElement('div');
+        dialog.className = 'help-dialog';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'help-close';
+        closeBtn.type = 'button';
+        closeBtn.setAttribute('aria-label', 'Close');
+        closeBtn.textContent = '×';
+        closeBtn.addEventListener('click', () => { overlay.hidden = true; });
+
+        const h2 = document.createElement('h2');
+        h2.dataset.i18n = 'tr.editMode.help.title';
+        h2.textContent = 'Edit Mode help';
+
+        const body = document.createElement('div');
+        body.className = 'help-body';
+        body.dataset.i18nHtml = 'tr.editMode.help.body';
+
+        dialog.appendChild(closeBtn);
+        dialog.appendChild(h2);
+        dialog.appendChild(body);
+        overlay.appendChild(dialog);
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.hidden = true;
+        });
+        document.body.appendChild(overlay);
+
+        // First-time apply i18n so the dataset attributes resolve.
+        refreshI18n();
+        return overlay;
+    }
+
+    // Esc closes any visible help overlay (this Edit Mode one + the global ?).
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        const overlay = document.getElementById('t-editmode-help-overlay');
+        if (overlay && !overlay.hidden) overlay.hidden = true;
+    });
 
     function toggleMode() {
         STATE.translationMode = !STATE.translationMode;
