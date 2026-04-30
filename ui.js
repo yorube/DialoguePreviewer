@@ -57,6 +57,8 @@
       'topbar.script': 'Script',
       'topbar.locale': 'Text language',
       'topbar.uiLang': 'Interface language',
+      'page.dialogue': '💬 Dialogue',
+      'page.uiStrings': '🧩 UI Strings',
       'btn.replayNode': '⟳ Replay this node',
       'btn.stepBack': '← Step back',
       'btn.continue': '▼ Continue (Space)',
@@ -230,6 +232,8 @@
       'topbar.script': '劇本',
       'topbar.locale': '文本語言',
       'topbar.uiLang': '介面語言',
+      'page.dialogue': '💬 對話',
+      'page.uiStrings': '🧩 UI 字串',
       'btn.replayNode': '⟳ 從本節點重看',
       'btn.stepBack': '← 退一行',
       'btn.continue': '▼ 繼續 (Space)',
@@ -2089,21 +2093,17 @@
       if (e.key === 'Escape' && !helpOverlay.hidden) closeHelp();
     });
 
-    // Compare Mode toggle (top-bar) — full-page switch to the side-by-side
-    // translation table. Esc exits Compare Mode (only if no other dialog /
-    // editor / inline thing is currently focused that consumed Esc).
-    const compareToggle = $('compare-mode-toggle');
-    if (compareToggle) {
-      compareToggle.addEventListener('click', toggleCompareMode);
-      document.addEventListener('keydown', e => {
-        if (e.key !== 'Escape') return;
-        if (!state.compareMode) return;
-        // If a cell editor is open, let it handle Esc itself.
-        if (document.querySelector('.compare-cell-editor textarea:focus')) return;
-        if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-        setCompareMode(false);
-      });
-    }
+    // Compare Mode Esc-to-exit. The toggle button itself lives in the
+    // dialogue modebar (injected later, next to the Edit Mode toggle); its
+    // click handler is wired at injection time.
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      if (!state.compareMode) return;
+      // If a cell editor is open, let it handle Esc itself.
+      if (document.querySelector('.compare-cell-editor textarea:focus')) return;
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+      setCompareMode(false);
+    });
 
     // Drag-drop fallback for loading per-locale .json directly (dev / no manifest).
     document.body.addEventListener('dragover', e => {
@@ -2171,6 +2171,24 @@
       refreshNodeList();
     });
 
+    // Compare Mode button — injected into the dialogue modebar so it sits
+    // right next to the Edit Mode toggle (translation-ui.js appends those
+    // first; we append the Compare button after they're in place below).
+    const ensureCompareButtonInModebar = () => {
+      if ($('compare-mode-toggle')) return;
+      const modebar = $('dialogue-modebar');
+      if (!modebar) return;
+      const btn = document.createElement('button');
+      btn.id = 'compare-mode-toggle';
+      btn.type = 'button';
+      btn.className = 'ctrl t-ctrl compare-mode-toggle';
+      btn.dataset.i18n = 'btn.compareLangs';
+      btn.dataset.i18nTitle = 'btn.compareLangs.tip';
+      btn.textContent = '📊 Compare languages';
+      btn.addEventListener('click', toggleCompareMode);
+      modebar.appendChild(btn);
+    };
+
     // Translation tab UI（如果模組有載入的話）。提供 hooks 讓它讀 ui.js 的 state。
     if (typeof TranslationUI !== 'undefined') {
       TranslationUI.install({
@@ -2213,6 +2231,15 @@
           if (active && state.compareMode) setCompareMode(false);
         },
       });
+      // translation-ui.js's install just populated the modebar with the
+      // Edit Mode toggle + ? button. Append the Compare button after them
+      // so they sit side-by-side, then run i18n so its label localises.
+      ensureCompareButtonInModebar();
+      applyI18n();
+    } else {
+      // No TranslationUI: still surface the Compare button (modebar is
+      // otherwise empty without translation-ui).
+      ensureCompareButtonInModebar();
     }
 
     // Global keyboard shortcuts (skip when typing in form fields).

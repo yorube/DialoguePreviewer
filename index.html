@@ -8,8 +8,8 @@
 </head>
 <body>
 <nav class="page-tabs" role="tablist">
-  <button class="page-tab active" data-page="dialogue" type="button" role="tab" aria-selected="true">💬 對話 / Dialogue</button>
-  <button class="page-tab" data-page="ui-strings" type="button" role="tab" aria-selected="false">🧩 UI 字串 / UI Strings</button>
+  <button class="page-tab active" data-page="dialogue" type="button" role="tab" aria-selected="true" data-i18n="page.dialogue">💬 Dialogue</button>
+  <button class="page-tab" data-page="ui-strings" type="button" role="tab" aria-selected="false" data-i18n="page.uiStrings">🧩 UI Strings</button>
 </nav>
 
 <div id="page-dialogue" class="page page-dialogue">
@@ -27,9 +27,6 @@
     </select>
   </label>
   <span id="status" class="status"></span>
-  <button id="compare-mode-toggle" class="ctrl compare-mode-toggle" type="button"
-    data-i18n="btn.compareLangs" data-i18n-title="btn.compareLangs.tip"
-    title="Switch to comparison view across all languages">📊 Compare languages</button>
   <button id="help-btn" class="help-btn" type="button" data-i18n-title="help.btn.tip" title="Help">?</button>
 </header>
 
