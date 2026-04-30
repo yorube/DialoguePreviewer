@@ -62,7 +62,7 @@
       'btn.continue': '▼ Continue (Space)',
       'btn.openNote': '📝 Note',
       'btn.compareLangs': '📊 Compare languages',
-      'btn.compareLangs.tip': 'Switch to a full-page side-by-side translation table for the active node. Click any non-source cell to edit. Press Esc to exit.',
+      'btn.compareLangs.tip': 'Swap the dialogue panel for a side-by-side translation table of the active node. Click any non-source cell to edit. Press Esc to exit.',
       'btn.resetOverrides': '🔄 Reset overrides ({n})',
       'compare.title': 'Translation comparison',
       'compare.tip': 'Each row is one translatable line / option in the current node. Cells show the displayed text per language (imported file + inline edits applied).',
@@ -235,7 +235,7 @@
       'btn.continue': '▼ 繼續 (Space)',
       'btn.openNote': '📝 筆記',
       'btn.compareLangs': '📊 對照各語言',
-      'btn.compareLangs.tip': '切換到全頁的多語言對照表（當前節點），可以直接點任一非原文格修改譯文。Esc 退出。',
+      'btn.compareLangs.tip': '把對話區換成多語言對照表（當前節點），可以直接點任一非原文格修改譯文。Esc 退出。',
       'btn.resetOverrides': '🔄 重置覆寫 ({n})',
       'compare.title': '翻譯對照表',
       'compare.tip': '每一列是當前節點裡一條可翻譯的對話/選項。每格顯示該語言實際會被看到的文字（已套用匯入檔 + 站內編輯）。',
@@ -1449,14 +1449,16 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // §12b Translation Compare Mode (full-page side-by-side view)
+  // §12b Translation Compare Mode (in-panel side-by-side view)
   // ─────────────────────────────────────────────────────────────────────────
-  // Switching Compare Mode on hides the source / vars panels and the dialogue
-  // toolbar; the dialogue panel fills the freed space and shows a comparison
-  // table for the active node across every bundled locale. Cells in non-source
-  // columns are click-to-edit (writes back to that locale's TranslationState).
-  // Mutually exclusive with Edit Mode — turning either on clears the other.
-  // Excel/CSV export uses the same 💾 button as the rest of the previewer.
+  // Switching Compare Mode on swaps the dialogue panel from runtime preview
+  // (or flat-edit view) to a comparison table for the active node across
+  // every bundled locale. Source / vars panels and the sidebar stay visible
+  // so the translator can keep referring to the original script while
+  // editing. Cells in non-source columns are click-to-edit (writes back to
+  // that locale's TranslationState). Mutually exclusive with Edit Mode —
+  // turning either on clears the other. CSV/xlsx export uses the existing
+  // 💾 button in the global ops bar.
 
   // Walk a parsed node's statements depth-first and yield every translatable
   // entry (Dialogue line / option) in display order, preserving srcLine so we
