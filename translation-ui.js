@@ -185,6 +185,37 @@
         }
         .flat-label { color: #88e088; opacity: 0.8; }
         .flat-body { padding-left: 16px; border-left: 1px dashed rgba(255,255,255,0.08); margin-left: 4px; }
+        /* End-of-dialogue badge — bumped out of the dim flat-meta look. */
+        .flat-end {
+            display: inline-block;
+            font-size: 13px;
+            font-weight: 700;
+            font-family: inherit;
+            letter-spacing: 1px;
+            color: #d68a8a;
+            background: rgba(200, 100, 100, 0.10);
+            border: 1px solid rgba(200, 100, 100, 0.35);
+            border-radius: 4px;
+            padding: 4px 12px;
+            margin: 8px 0;
+            opacity: 1;
+            cursor: help;
+        }
+        /* Clickable goto target inside flat-meta rows. */
+        .flat-goto-target {
+            color: #88c8ff;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .flat-goto-target:hover { color: #b8d8ff; }
+        /* Brief highlight pulse when goto scrolls a label into view. */
+        @keyframes flat-flash {
+            0%   { background: rgba(255, 230, 120, 0.28); }
+            100% { background: transparent; }
+        }
+        .flash-target { animation: flat-flash 1.5s ease-out; border-radius: 3px; }
         /* In flat view, ✏️ is the primary action — keep it visible without hover. */
         .flat-edit-view .t-edit-btn { opacity: 0.7; }
         .flat-edit-view .row-line:hover .t-edit-btn,

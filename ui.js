@@ -125,6 +125,8 @@
       'tr.export.ago.minutes': '{n}m',
       'tr.export.ago.hours': '{n}h',
       'tr.export.ago.days': '{n}d',
+      'flat.end.tip': 'Dialogue ends here',
+      'flat.goto.tip': 'Jump to @{label}',
       'help.btn.tip': 'Help',
       'help.title': 'How to use this previewer',
       'help.body': `
@@ -253,6 +255,8 @@
       'tr.export.ago.minutes': '{n} 分鐘',
       'tr.export.ago.hours': '{n} 小時',
       'tr.export.ago.days': '{n} 天',
+      'flat.end.tip': '對話在這裡結束',
+      'flat.goto.tip': '點此跳到 @{label}',
       'help.btn.tip': '說明',
       'help.title': '使用說明',
       'help.body': `
@@ -1289,18 +1293,59 @@
   function renderFlatMeta(container, stmt) {
     const row = document.createElement('div');
     row.className = 'flat-meta';
-    let label = '';
-    switch (stmt.type) {
-      case 'goto':     label = `→ goto ${stmt.label}`; break;
-      case 'condGoto': label = `→ ${stmt.isElse ? 'elseGoto' : 'condGoto'} ${stmt.label} (${stmt.cond})`; break;
-      case 'label':    row.classList.add('flat-label'); label = `@${stmt.name}`; break;
-      case 'set':      label = `set ${stmt.variable} = ${stmt.expr}`; break;
-      case 'wait':     label = `wait ${stmt.seconds}s`; break;
-      case 'end':      label = '— end —'; break;
-      default:         return;
+    if (stmt.type === 'end') {
+      row.classList.add('flat-end');
+      row.textContent = '— end —';
+      row.title = t('flat.end.tip');
+    } else if (stmt.type === 'label') {
+      row.classList.add('flat-label');
+      row.dataset.labelName = stmt.name;
+      row.textContent = `@${stmt.name}`;
+    } else if (stmt.type === 'goto' || stmt.type === 'condGoto') {
+      const prefix = stmt.type === 'goto' ? 'goto' : (stmt.isElse ? 'elseGoto' : 'condGoto');
+      row.appendChild(document.createTextNode(`→ ${prefix} `));
+      const target = document.createElement('span');
+      target.className = 'flat-goto-target';
+      target.textContent = stmt.label;
+      target.title = t('flat.goto.tip', { label: stmt.label });
+      target.addEventListener('click', () => jumpToLabel(stmt.label));
+      row.appendChild(target);
+      if (stmt.type === 'condGoto') {
+        row.appendChild(document.createTextNode(` (${stmt.cond})`));
+      }
+    } else if (stmt.type === 'set') {
+      row.textContent = `set ${stmt.variable} = ${stmt.expr}`;
+    } else if (stmt.type === 'wait') {
+      row.textContent = `wait ${stmt.seconds}s`;
+    } else {
+      return;
     }
-    row.textContent = label;
     container.appendChild(row);
+  }
+
+  // Click handler for flat-view goto targets. Scroll to the @label row inside
+  // the current node first; if the label belongs to a different node,
+  // navigate there and scroll once the flat view rebuilds.
+  function jumpToLabel(labelName) {
+    const view = document.getElementById('flat-edit-view');
+    if (!view) return;
+    const sel = `[data-label-name="${CSS.escape(labelName)}"]`;
+    let target = view.querySelector(sel);
+    if (target) { flashFlatTarget(target); return; }
+    const proj = activeProject();
+    const ownerNode = proj && proj.globalLabels && proj.globalLabels.get(labelName);
+    if (!ownerNode) return;  // unknown label — silent no-op
+    startAt(ownerNode);       // re-renders flat view for the owner node
+    target = view.querySelector(sel);
+    if (target) flashFlatTarget(target);
+  }
+
+  function flashFlatTarget(el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('flash-target');
+    void el.offsetWidth;       // force restart of CSS animation
+    el.classList.add('flash-target');
+    setTimeout(() => el.classList.remove('flash-target'), 1600);
   }
 
   function uidForFlat(nodeCtx, srcLine) {
