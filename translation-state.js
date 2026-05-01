@@ -38,28 +38,35 @@
 
         // ----- Persistence -----
 
+        // Returns: 'full' | 'slim' | 'failed'.
+        // 'failed' means localStorage write was rejected even after dropping
+        // the source rows — caller should surface this so the translator
+        // doesn't lose work after a refresh.
         function persist() {
-            // 先嘗試帶 source 的 full payload；超過 quota 時退而求其次只存譯文，不存 source
             const fullPayload = {
                 v: STORAGE_VERSION,
                 locale: state.locale,
                 baseline: Array.from(state.baseline.entries()),
                 overrides: Array.from(state.overrides.entries()),
                 sourceMeta: state.sourceMeta,
-                source: state.source, // 整份 rows 一起存（quota 緊張時 fallback）
+                source: state.source,
             };
             try {
                 localStorage.setItem(storageKey, JSON.stringify(fullPayload));
-                return;
+                state.lastPersistMode = 'full';
+                return 'full';
             } catch (e) {
-                // 通常是 QuotaExceededError；移除 source 後再試
                 console.warn('[TranslationState] full persist failed, dropping source:', e.message);
             }
             try {
                 const slim = Object.assign({}, fullPayload, { source: null });
                 localStorage.setItem(storageKey, JSON.stringify(slim));
+                state.lastPersistMode = 'slim';
+                return 'slim';
             } catch (e2) {
-                console.warn('[TranslationState] slim persist also failed:', e2.message);
+                console.error('[TranslationState] slim persist also failed:', e2.message);
+                state.lastPersistMode = 'failed';
+                return 'failed';
             }
         }
 
@@ -109,7 +116,7 @@
             } else {
                 state.overrides.set(uid, text);
             }
-            persist();
+            return persist();
         }
 
         /**
@@ -126,7 +133,7 @@
             if (!options.preserveOverrides) {
                 state.overrides = new Map();
             }
-            persist();
+            return persist();
         }
 
         function getSource() { return state.source; }
@@ -136,7 +143,7 @@
          */
         function clearOverrides() {
             state.overrides = new Map();
-            persist();
+            return persist();
         }
 
         /**

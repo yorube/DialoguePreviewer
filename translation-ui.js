@@ -473,20 +473,46 @@
             if (!proceed) return;
         }
 
-        ts.replaceBaseline(parsed.translations, {
+        // Persist baseline FIRST. If localStorage is exhausted (quota), we
+        // need to know before touching anything else — refusing the import
+        // is safer than half-saving and surprising the translator with a
+        // post-refresh rollback.
+        const persistResult = ts.replaceBaseline(parsed.translations, {
             fileName: parsed.stats.sourceFile,
             importedAt: new Date().toISOString(),
             totalRows: parsed.stats.totalRows,
             withTranslation: parsed.stats.withTranslation,
-        }, { source: parsed.source }); // 預設清掉 overrides（完全替代語意）
+        }, { source: parsed.source });
 
-        // Restore translator notes if the imported file carries a Notes column.
-        const notesRestored = restoreNotesFromSource(parsed.source);
-        if (notesRestored) {
-            console.log(`[translation-ui] restored ${notesRestored} translator notes from import`);
+        if (persistResult === 'failed') {
+            // baseline lives only in memory — refresh will lose it. Tell the
+            // user explicitly and DON'T touch notes (we don't want a partial-
+            // success state where notes outlive the translations they
+            // belonged to).
+            alert(t('tr.alert.persistFailed', {
+                locale: activeLocale,
+                file: parsed.stats.sourceFile,
+            }));
+            // Hand display refresh a best-effort run anyway so the in-memory
+            // import is at least visible until the page is closed.
+            try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
+            try { if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw(); }
+            catch (e) { console.error('[requestRedraw]', e); }
+            return;
         }
 
-        // After import, local state matches the imported file → mark clean.
+        // Notes restore happens only after baseline is durably persisted —
+        // avoids the "notes saved but translations vanished on refresh" bug.
+        let notesRestored = 0;
+        try {
+            notesRestored = restoreNotesFromSource(parsed.source);
+            if (notesRestored) {
+                console.log(`[translation-ui] restored ${notesRestored} translator notes from import`);
+            }
+        } catch (e) {
+            console.error('[translation-ui] note restore failed:', e);
+        }
+
         if (STATE.hooks && STATE.hooks.markExported) STATE.hooks.markExported();
 
         if (parsed.warnings.length) {
@@ -499,16 +525,22 @@
         const warningSummary = parsed.warnings.length
             ? t('tr.alert.warnings', { head }) + more
             : '';
+        const persistNote = persistResult === 'slim'
+            ? t('tr.alert.persistSlim') : '';
         alert(t('tr.alert.loaded', {
             locale: activeLocale,
             file: parsed.stats.sourceFile,
             total: parsed.stats.totalRows,
             translated: parsed.stats.withTranslation,
             missing: parsed.stats.missingUid,
-        }) + warningSummary);
+        }) + persistNote + warningSummary);
 
-        updateStats();
-        if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+        // Both display-refresh paths are isolated — a thrown updateStats
+        // (e.g. en-US not loaded for the active script yet) must not block
+        // the transcript from picking up the new translations.
+        try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
+        try { if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw(); }
+        catch (e) { console.error('[requestRedraw]', e); }
     }
 
     // ----- Reset -----
@@ -762,8 +794,13 @@
         cancel.addEventListener('click', close);
         ok.addEventListener('click', () => {
             const newText = ta.value;
-            ts.setOverride(uid, newText);
-            updateStats();
+            const persistResult = ts.setOverride(uid, newText);
+            if (persistResult === 'failed') {
+                alert(t('tr.alert.persistFailed', {
+                    locale: STATE.hooks.getActiveLocale(), file: '(inline edit)',
+                }));
+            }
+            try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
             if (STATE.hooks && STATE.hooks.markEditDirty) STATE.hooks.markEditDirty();
             close();
             if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
