@@ -602,30 +602,80 @@
         const el = document.getElementById('t-stats');
         if (!el) return;
         const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+        const projUids = STATE.hooks && STATE.hooks.getActiveProjectUids
+            ? STATE.hooks.getActiveProjectUids() : null;
+        const total = projUids ? projUids.size : 0;
+
+        // Reset progress before any early return so a stale bar doesn't linger
+        // when we switch into "no locale" / "not loaded" states.
+        const noStats = !activeLocale || !total;
+        if (noStats) updateProgress(0, 0);
+
         if (!activeLocale) {
             el.textContent = t('tr.stats.noLocale');
+            el.classList.remove('has-untranslated');
             return;
         }
         const ts = getOrCreateState(activeLocale);
-        if (!ts || (ts.stats().baselineCount === 0 && ts.stats().overrideCount === 0)) {
-            el.textContent = t('tr.stats.notLoaded', { locale: activeLocale });
-            return;
+        const s = ts ? ts.stats() : null;
+        const isSrc = isSourceLocale(activeLocale);
+
+        let done = 0;
+        if (ts && total) {
+            const merged = ts.buildMergedMap();
+            for (const uid of projUids) {
+                const v = merged.get(uid);
+                if (v != null && v !== '') done++;
+            }
         }
-        const s = ts.stats();
+        // Source locales (en-US / zh-TW) are authored, not translated — they
+        // are always 100% by definition. Suppress the warn-state highlight.
+        if (isSrc && total) done = total;
+
         el.innerHTML = '';
-        const main = document.createElement('span');
-        main.textContent = t('tr.stats.loaded', {
-            locale: activeLocale,
-            b: s.baselineCount,
-            o: s.overrideCount,
-        });
-        el.appendChild(main);
-        if (s.sourceMeta && s.sourceMeta.fileName) {
+        if (total) {
+            const main = document.createElement('span');
+            main.textContent = t('tr.stats.progress', { done, total });
+            el.appendChild(main);
+            updateProgress(done, total);
+            el.classList.toggle('has-untranslated', !isSrc && done < total);
+        } else if (s && (s.baselineCount || s.overrideCount)) {
+            // No project UIDs available yet (e.g. en-US data still loading)
+            // but we do have a state. Fall back to the legacy summary so the
+            // user still sees something meaningful.
+            const main = document.createElement('span');
+            main.textContent = t('tr.stats.loaded', {
+                locale: activeLocale, b: s.baselineCount, o: s.overrideCount,
+            });
+            el.appendChild(main);
+            el.classList.remove('has-untranslated');
+        } else {
+            el.textContent = t('tr.stats.notLoaded', { locale: activeLocale });
+            el.classList.remove('has-untranslated');
+        }
+
+        if (s && s.sourceMeta && s.sourceMeta.fileName) {
             const file = document.createElement('span');
             file.style.opacity = '0.6';
             file.textContent = t('tr.stats.loadedFile', { file: s.sourceMeta.fileName });
             el.appendChild(file);
         }
+    }
+
+    function updateProgress(done, total) {
+        const wrap   = document.getElementById('t-progress');
+        const dEl    = document.getElementById('t-prog-done');
+        const tEl    = document.getElementById('t-prog-total');
+        const fillEl = document.getElementById('t-prog-fill');
+        const pctEl  = document.getElementById('t-prog-pct');
+        if (!wrap) return;
+        if (!total) { wrap.hidden = true; return; }
+        wrap.hidden = false;
+        if (dEl) dEl.textContent = String(done);
+        if (tEl) tEl.textContent = String(total);
+        const pct = Math.round((done / total) * 100);
+        if (fillEl) fillEl.style.width = pct + '%';
+        if (pctEl) pctEl.textContent = pct + '%';
     }
 
     // ----- Translation lookup（給 transcript 渲染用） -----

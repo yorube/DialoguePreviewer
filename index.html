@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MBU Yarn Preview</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=ux-redesign">
 </head>
 <body>
 <nav class="page-tabs" role="tablist">
@@ -40,6 +40,16 @@
 
 <!-- 第二行：全域功能列（翻譯流程的上傳 / 下載 / 重置；由 translation-ui.js 注入內容） -->
 <header class="topbar topbar-globalops" id="topbar-globalops"></header>
+
+<!-- Translation progress bar — fed by translation-ui.js updateStats -->
+<div class="t-progress" id="t-progress" hidden>
+  <span class="t-progress-label">
+    <span id="t-prog-done">0</span> / <span id="t-prog-total">0</span>
+    <span data-i18n="tr.progress.translated">translated</span>
+  </span>
+  <div class="t-progress-track"><div class="t-progress-fill" id="t-prog-fill" style="width:0%"></div></div>
+  <span class="t-progress-label" id="t-prog-pct">0%</span>
+</div>
 
 <main class="layout">
   <aside class="sidebar">

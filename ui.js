@@ -114,6 +114,7 @@
       'tooltip.overridden': 'Overridden by user',
       'tooltip.rewind': 'Rewind to this line',
       'tooltip.gender': 'Grammatical gender (for translation)',
+      'tooltip.scrollSourceTop': 'Click to scroll source to top',
       // ----- Translation Edit Mode -----
       'tr.editMode': '✏️ Translation Edit Mode',
       'tr.editMode.tip': 'Enable to inline-edit translations on the dialogue preview. Edits are saved in your browser only.',
@@ -155,6 +156,9 @@
       'tr.stats.loaded': '{locale}: baseline {b} / inline edits {o}',
       'tr.stats.loadedFile': ' ({file})',
       'tr.stats.loading': 'Loading translation tables…',
+      'tr.stats.progress': '{done} / {total} translated',
+      'tr.progress.label': '{done} / {total} translated',
+      'tr.progress.translated': 'translated',
       'tr.alert.pickLocale': 'Please switch the Language selector to your target language (e.g. fr-FR / ru-RU) before importing.',
       'tr.alert.sourceLocale': 'Translation import only applies to target languages. {locale} is a source language (text comes FROM it, not into it).\n\nWhat to do:\n  1. Switch the "Text language" selector to a target language (ru-RU / fr-FR / it-IT / es-ES / ja-JP).\n  2. Then import the matching translation file (e.g. Loc_ru-RU.csv).',
       'tr.alert.sourceLocaleDownload': 'Export produces a translation file (en-US source → target language). {locale} is the source language, so there is nothing to export as a translation.\n\nWhat to do:\n  1. Switch the "Text language" selector to a target language (ru-RU / fr-FR / it-IT / es-ES / ja-JP).\n  2. Then press [💾 Export] again.',
@@ -295,6 +299,7 @@
       'tooltip.overridden': '使用者覆寫',
       'tooltip.rewind': '退回到此句',
       'tooltip.gender': '文法性別（翻譯用）',
+      'tooltip.scrollSourceTop': '點擊回到原始碼最上方',
       // ----- 翻譯編輯模式 -----
       'tr.editMode': '✏️ 翻譯編輯模式',
       'tr.editMode.tip': '開啟後，可以在對話預覽上點 ✏️ 直接修改該句譯文。所有改動只存在你的瀏覽器內。',
@@ -336,6 +341,9 @@
       'tr.stats.loaded': '{locale}：基準 {b} 條 / 站內編輯 {o} 條',
       'tr.stats.loadedFile': '（{file}）',
       'tr.stats.loading': '載入翻譯對照表中…',
+      'tr.stats.progress': '{done} / {total} 已翻譯',
+      'tr.progress.label': '{done} / {total} 已翻譯',
+      'tr.progress.translated': '已翻譯',
       'tr.alert.pickLocale': '請先在右上「Language」切換到要載入的目標語言（如 fr-FR / ru-RU）。',
       'tr.alert.sourceLocale': '翻譯匯入僅適用於目標語言。{locale} 是來源語言（文本是「從」這個語言翻出去的，不是翻「到」這個語言）。\n\n要怎麼測試：\n  1. 把上方「文本語言」切到目標語言（ru-RU / fr-FR / it-IT / es-ES / ja-JP）。\n  2. 再匯入對應的翻譯檔（例如 Loc_ru-RU.csv）。',
       'tr.alert.sourceLocaleDownload': '匯出會產出一份翻譯檔（en-US 原文 → 目標語言）。{locale} 是來源語言，所以沒有「翻譯」可以匯出。\n\n要怎麼處理：\n  1. 把上方「文本語言」切到目標語言（ru-RU / fr-FR / it-IT / es-ES / ja-JP）。\n  2. 再按一次 [💾 匯出譯文]。',
@@ -484,6 +492,7 @@
     noteSaveTimer: null,            // debounce timer for note autosave
     noteLoadedFor: null,            // {group, title} the textarea is bound to
     compareMode: false,             // Compare Mode (full-page side-by-side)
+    lastVarValues: {},              // previous var values for change badges
   };
 
   function activeProject() {
@@ -981,6 +990,12 @@
       renderVars();
       syncActiveNodeInList();
     }
+    // Refresh translation stats / progress whenever the active script or
+    // locale data finishes loading — getActiveProjectUids depends on the
+    // en-US project being available.
+    if (typeof TranslationUI !== 'undefined' && TranslationUI.notifyLocaleChange) {
+      TranslationUI.notifyLocaleChange();
+    }
   }
 
   function refreshNodeList() {
@@ -1010,7 +1025,7 @@
       const li = document.createElement('li');
       const hasNote = noted.has(title);
       if (hasNote) li.classList.add('has-note');
-      if (title === activeTitle) li.classList.add('active');
+      if (title === activeTitle) li.classList.add('is-active');
       li.dataset.nodeTitle = title;
 
       const num = document.createElement('span');
@@ -1043,7 +1058,7 @@
     $('node-count').textContent = `(${titles.length})`;
   }
 
-  // Update the .active class on the node-list <li> for the current node
+  // Update the .is-active class on the node-list <li> for the current node
   // without rebuilding the whole list. Called from setActiveNode so the
   // highlight follows mid-dialogue jumps and sidebar clicks alike.
   function syncActiveNodeInList() {
@@ -1053,7 +1068,7 @@
     let activeLi = null;
     for (const li of list.querySelectorAll('li')) {
       const on = li.dataset.nodeTitle === activeTitle;
-      li.classList.toggle('active', on);
+      li.classList.toggle('is-active', on);
       if (on) activeLi = li;
     }
     if (activeLi) {
@@ -1252,6 +1267,47 @@
     const defaults = declNode ? (YarnRuntime.readDeclaredDefaults(declNode.body) || {}) : {};
     for (const [k, v] of state.varOverrides) defaults[k] = v;
     return defaults;
+  }
+
+  function handleVarChange(name, value) {
+    const prev = state.lastVarValues[name];
+    state.lastVarValues[name] = value;
+    appendVarChangeBadge(name, prev, value);
+    flashVarRow(name);
+    renderVars();
+  }
+
+  function appendVarChangeBadge(name, prev, next) {
+    const tEl = $('transcript');
+    if (!tEl) return;
+    const rows = tEl.querySelectorAll('.row-line, .row-jump, .row-choice');
+    const target = rows[rows.length - 1];
+    if (!target) return;
+    const badge = document.createElement('span');
+    badge.className = 'var-change-badge';
+    const fromStr = prev === undefined ? '∅' : String(prev);
+    const toStr   = next === undefined ? '∅' : String(next);
+    const make = (cls, txt) => {
+      const s = document.createElement('span');
+      s.className = cls;
+      s.textContent = txt;
+      return s;
+    };
+    badge.appendChild(make('vc-name', '$' + name));
+    badge.appendChild(make('vc-from', fromStr));
+    badge.appendChild(make('vc-arrow', '→'));
+    badge.appendChild(make('vc-to', toStr));
+    target.appendChild(badge);
+  }
+
+  function flashVarRow(name) {
+    const panel = $('vars');
+    if (!panel) return;
+    const row = panel.querySelector(`.var-row[data-var-name="${CSS.escape(name)}"]`);
+    if (!row) return;
+    row.classList.remove('flash');
+    void row.offsetWidth; // restart the animation
+    row.classList.add('flash');
   }
 
   function renderVars() {
@@ -1713,6 +1769,43 @@
     if (!enEntry) return null;
     if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return null;
     return TranslationUI.getUidFor(enEntry.filename, nodeCtx.nodeIndex, srcLine);
+  }
+
+  // Walk the active script's en-US project and return the UID set of every
+  // translatable line / choice option. Used by translation-ui.js to render
+  // "X / Y translated" stats and the progress bar.
+  function collectActiveProjectUids() {
+    const out = new Set();
+    if (!state.activeGroup) return out;
+    const groupMap = state.groups.get(state.activeGroup);
+    if (!groupMap) return out;
+    const enEntry = groupMap.get('en-US');
+    if (!enEntry || !enEntry.project) return out;
+    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return out;
+
+    const visit = (statements, nodeIndex) => {
+      for (const s of statements) {
+        if (s.type === 'line') {
+          const uid = TranslationUI.getUidFor(enEntry.filename, nodeIndex, s.srcLine);
+          if (uid) out.add(uid);
+        } else if (s.type === 'choices') {
+          for (const item of s.items) {
+            const uid = TranslationUI.getUidFor(enEntry.filename, nodeIndex, item.srcLine);
+            if (uid) out.add(uid);
+            if (item.body) visit(item.body, nodeIndex);
+          }
+        } else if (s.type === 'if') {
+          if (s.then) visit(s.then, nodeIndex);
+          if (s.else) visit(s.else, nodeIndex);
+        }
+      }
+    };
+
+    for (const node of enEntry.project.nodes.values()) {
+      if (!node || !node.statements) continue;
+      visit(node.statements, node.nodeIndex);
+    }
+    return out;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2310,7 +2403,8 @@
       return;
     }
     state.runtime = new YarnRuntime(proj);
-    state.runtime.onVarChange = renderVars;
+    state.lastVarValues = { ...state.runtime.vars };
+    state.runtime.onVarChange = handleVarChange;
     $('transcript').innerHTML = '';
     setActiveNode(nodeTitle);
     state.snapshots = [];
@@ -2426,6 +2520,17 @@
       btn.addEventListener('click', () => setSourcePanelTab(btn.dataset.tab));
     });
     $('note-toggle').addEventListener('click', () => setSourcePanelTab('notes'));
+
+    // Click the current node title to scroll the source view back to top.
+    const headerTitle = $('current-node');
+    if (headerTitle) {
+      headerTitle.style.cursor = 'pointer';
+      headerTitle.title = t('tooltip.scrollSourceTop');
+      headerTitle.addEventListener('click', () => {
+        const view = $('source-view');
+        if (view) view.scrollTop = 0;
+      });
+    }
     $('note-textarea').addEventListener('blur', commitNoteValue);
     $('note-textarea').addEventListener('input', () => {
       clearTimeout(state.noteSaveTimer);
@@ -2523,6 +2628,9 @@
         onEditModeChange: (active) => {
           if (active && state.compareMode) setCompareMode(false);
         },
+        // Translatable UID set for the active script (en-US baseline). Used
+        // by the stats / progress bar to render "X / Y translated".
+        getActiveProjectUids: collectActiveProjectUids,
       });
       // translation-ui.js's install just populated the modebar with the
       // Edit Mode toggle + ? button. Append the Compare button after them
