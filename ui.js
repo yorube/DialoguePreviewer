@@ -61,6 +61,8 @@
       'page.uiStrings': '🧩 UI Strings',
       'btn.play': '▶ Play',
       'btn.play.tip': 'Start the dialogue runtime from line 1 of this node (Space / Enter / R).',
+      'btn.stop': '■ Stop',
+      'btn.stop.tip': 'Stop playback and return to navigation. Click ▶ again to replay from line 1.',
       'btn.replayNode': '⟳ Replay',
       'btn.stepBack': '← Step back',
       'btn.continue': '▼ Continue (Space)',
@@ -247,6 +249,8 @@
       'page.uiStrings': '🧩 UI 字串',
       'btn.play': '▶ 撥放',
       'btn.play.tip': '從本節點第 1 行開始跑對話 runtime（Space / Enter / R）。',
+      'btn.stop': '■ 停止',
+      'btn.stop.tip': '停止播放並回到導覽狀態。再按一次 ▶ 會從第 1 行重播。',
       'btn.replayNode': '⟳ 重看',
       'btn.stepBack': '← 退一行',
       'btn.continue': '▼ 繼續 (Space)',
@@ -2468,6 +2472,16 @@
     refreshAuxModes();
   }
 
+  // Tear down the runtime and return to navigation-only state for the same
+  // node. The transcript clears, snapshots are dropped, the placeholder
+  // re-appears — same shape as if the user had just clicked the node from
+  // the sidebar without ever pressing ▶.
+  function stopPlayback() {
+    const title = currentNodeTitle();
+    if (!title) return;
+    navigateToNode(title);
+  }
+
   function playFromCurrentNode() {
     const proj = activeProject();
     const title = state.runtime ? state.runtime.currentNodeTitle : currentNodeTitle();
@@ -2533,8 +2547,9 @@
   }
 
   // Sync the dialogue toolbar to the current playback state.
-  //   ▶ Play       — hidden mid-playback; visible (and primary CTA) when
-  //                  navigating, ended, or no node selected
+  //   #play-btn    — same element throughout. ▶ Play when idle (no runtime
+  //                  or ended); ■ Stop while playing. Click dispatches
+  //                  on current state, so the click handler stays one line.
   //   ⟳ Replay     — always present; only meaningful with a node selected
   //   ← Step back  — handled by updateBackBtn (snapshot-count aware)
   function refreshPlaybackUi() {
@@ -2544,7 +2559,13 @@
     const replayBtn = $('replay-btn');
     if (playBtn) {
       playBtn.disabled = !hasNode;
-      playBtn.hidden = playing;
+      const key = playing ? 'btn.stop' : 'btn.play';
+      const tipKey = playing ? 'btn.stop.tip' : 'btn.play.tip';
+      playBtn.dataset.i18n = key;
+      playBtn.dataset.i18nTitle = tipKey;
+      playBtn.textContent = t(key);
+      playBtn.title = t(tipKey);
+      playBtn.classList.toggle('is-stop', playing);
     }
     if (replayBtn) replayBtn.disabled = !hasNode;
     updateBackBtn();
@@ -2640,8 +2661,12 @@
     $('ui-lang-select').value = currentLang;
     $('ui-lang-select').addEventListener('change', e => setLang(e.target.value));
 
-    // Dialogue toolbar buttons.
-    $('play-btn').addEventListener('click', playFromCurrentNode);
+    // Dialogue toolbar buttons. Play / Stop are the same element; dispatch
+    // on the current playback state.
+    $('play-btn').addEventListener('click', () => {
+      if (state.runtime && !state.runtime.ended) stopPlayback();
+      else playFromCurrentNode();
+    });
     $('replay-btn').addEventListener('click', () => {
       if (currentNodeTitle()) playFromCurrentNode();
     });
