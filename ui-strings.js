@@ -510,15 +510,15 @@
         .topbar-ui-strings .ctrl-import:hover { background: rgba(120, 180, 255, 0.22); }
         .topbar-ui-strings .ctrl-import input[type="file"] { display: none; }
         .topbar-ui-strings .ctrl-btn {
-            background: var(--bg3);
+            background: var(--bg-2);
             color: var(--fg);
-            border: 1px solid var(--border);
+            border: 1px solid var(--line);
             border-radius: 4px;
             padding: 4px 12px;
             font-size: 13px;
             cursor: pointer;
         }
-        .topbar-ui-strings .ctrl-btn:hover { background: var(--choice-bg); }
+        .topbar-ui-strings .ctrl-btn:hover { background: var(--bg-3); }
         .topbar-ui-strings .ctrl-btn.danger { border-color: rgba(220, 120, 120, 0.4); }
         .topbar-ui-strings .ctrl-btn.danger:hover { background: rgba(200, 100, 100, 0.18); }
 
@@ -541,9 +541,9 @@
             display: flex;
             flex-wrap: wrap;
             gap: 0;
-            background: var(--bg2);
+            background: var(--bg-1);
             padding: 0 8px;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--line);
             min-height: 38px;
         }
         .ui-strings-sheet-tabs.empty { display: none; }
@@ -569,14 +569,14 @@
             gap: 12px;
             align-items: center;
             padding: 8px 16px;
-            background: var(--bg3);
-            border-bottom: 1px solid var(--border);
+            background: var(--bg-2);
+            border-bottom: 1px solid var(--line);
         }
         .ui-strings-filter {
             flex: 0 1 320px;
             padding: 4px 10px;
-            background: var(--bg2);
-            border: 1px solid var(--border);
+            background: var(--bg-1);
+            border: 1px solid var(--line);
             border-radius: 3px;
             color: var(--fg);
             font-size: 13px;
@@ -601,7 +601,7 @@
         .ui-strings-table-wrap {
             flex: 1;
             overflow: auto;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid var(--line);
         }
         .ui-strings-table {
             width: 100%;
@@ -613,9 +613,9 @@
             position: sticky;
             top: 0;
             z-index: 2;
-            background: var(--bg2);
-            border-bottom: 2px solid var(--border);
-            border-right: 1px solid var(--border);
+            background: var(--bg-1);
+            border-bottom: 2px solid var(--line);
+            border-right: 1px solid var(--line);
             padding: 6px 8px;
             text-align: left;
             font-weight: 600;
@@ -624,8 +624,8 @@
             white-space: nowrap;
         }
         .ui-strings-table tbody td {
-            border-bottom: 1px solid var(--border);
-            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--line);
+            border-right: 1px solid var(--line);
             padding: 6px 8px;
             vertical-align: top;
             line-height: 1.5;
@@ -679,8 +679,8 @@
         .ui-cell-editor .actions { display: flex; flex-direction: column; gap: 2px; }
         .ui-cell-editor button {
             padding: 1px 8px;
-            background: var(--bg2);
-            border: 1px solid var(--border);
+            background: var(--bg-1);
+            border: 1px solid var(--line);
             border-radius: 3px;
             color: inherit;
             cursor: pointer;

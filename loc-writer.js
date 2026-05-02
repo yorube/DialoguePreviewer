@@ -108,11 +108,5 @@
         });
     }
 
-    global.LocWriter = {
-        writeLocFile,
-        // 給測試用
-        _applyTranslationsToRows: applyTranslationsToRows,
-        _buildCsvText: buildCsvText,
-        _escapeCsvCell: escapeCsvCell,
-    };
+    global.LocWriter = { writeLocFile };
 })(typeof window !== 'undefined' ? window : globalThis);

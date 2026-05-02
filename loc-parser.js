@@ -10,7 +10,7 @@
 //     Type, Gender, CharacterName, en-US, {locale}, ID, FileName, NodeTitle
 //
 // 解析時不依賴欄位順序，靠 header 名稱定位 ID 跟翻譯欄。
-// 全域 export：window.LocParser.{ parseFile, parseCsv, parseXlsx }
+// 全域 export：window.LocParser.parseFile
 //
 // 依賴：xlsx.full.min.js 必須先載入（用於 xlsx 解析）
 
@@ -282,12 +282,5 @@
         return rows;
     }
 
-    global.LocParser = {
-        parseFile,
-        parseCsv,
-        parseXlsx,
-        // export for testing
-        _parseCsvText: parseCsvText,
-        _identifyColumns: identifyColumns,
-    };
+    global.LocParser = { parseFile };
 })(typeof window !== 'undefined' ? window : globalThis);

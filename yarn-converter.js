@@ -1,13 +1,9 @@
 // yarn-converter.js
-// 純前端版本的 Yarn 翻譯流程（從 v2 C# YarnDialogueSOFactory + YarnLineParser +
-// YarnLocalizationService 移植，已經以 PoC 驗證對 ru-RU/fr-FR 產出與 Unity v2
-// byte-identical）。
+// 純前端版本的 Yarn 翻譯流程（從 v2 C# YarnDialogueSOFactory + YarnLineParser
+// 移植）。目前只用到 buildSO — translation-ui.js 的 buildSyntheticSource
+// 在沒有譯者上傳檔可參考時，用它從 en-US AST 重建 LocKit 風格 CSV。
 //
-// 全域 export：window.YarnConverter
-//   - buildSO(jsonContent, guid) : 把 yarn json (parsed array) 解析成 SO-equivalent
-//   - applyTranslations(so, translationMap, locale) : 用 UID 表覆寫 dialogue
-//   - serializeJson(so) : SO → 與 Newtonsoft.Json Formatting.Indented byte-identical 的字串
-//   - resolveCharacterName(rawName, characterTranslations, characterKeys, locale)
+// 全域 export：window.YarnConverter.buildSO
 //
 // 注意：character 翻譯需要兩張表配合（en-US 名 → key + key+locale → 翻譯名），
 // 這兩張表由 Build-Bundle.ps1 抽 `翻譯對照表.xlsx` sheet6 後預先 bundle 進站。
@@ -169,87 +165,5 @@
         return { name: localized, found: true };
     }
 
-    // ----- Apply translations to SO -----
-
-    // translationMap: Map<UID, translatedText>
-    // 只覆寫 Dialogue / Option 的 .dialogue（與 v2 RemapDialogueByUid 一致），
-    // commands / optionCommand / leadingWhitespace 不動。
-    function applyTranslations(so, translationMap) {
-        if (!translationMap || typeof translationMap.get !== 'function') {
-            throw new Error('translationMap must be a Map');
-        }
-        let applied = 0;
-        for (const node of so) {
-            for (const line of node.textLines) {
-                if (line.category !== 'Dialogue' && line.category !== 'Option') continue;
-                const t = translationMap.get(line.uid);
-                if (t == null || t === '') continue;
-                line.dialogue = String(t).replace(/"/g, ''); // 對齊 v2 的 .Replace("\"", "")
-                applied++;
-            }
-        }
-        return applied;
-    }
-
-    // ----- Serialize SO → JSON string (Newtonsoft.Json Formatting.Indented compatible) -----
-
-    function serializeJson(so) {
-        const arr = so.map(node => ({
-            title: node.title,
-            tags: node.tags,
-            body: buildBody(node.textLines),
-            position: node.position,
-            colorID: node.colorID,
-        }));
-        // Newtonsoft 預設縮排 2 空白 + Windows 行尾 \r\n
-        let json = JSON.stringify(arr, null, 2);
-        json = json.replace(/\n/g, '\r\n');
-        return json;
-    }
-
-    function buildBody(textLines) {
-        return textLines.map(buildLine).join('\n');
-    }
-
-    function buildLine(line) {
-        let prefix = '';
-        if (line.leadingWhitespaceCount > 0) {
-            prefix = ' '.repeat(line.leadingWhitespaceCount);
-        }
-        let body = '';
-        if (line.category === 'Dialogue') {
-            body = buildDialoguePrefix(line) + appendCommands(line.commands);
-        } else if (line.category === 'Option') {
-            body = '-> ' + line.dialogue + (line.optionCommand || '') + appendCommands(line.commands);
-        } else {
-            body = line.dialogue;
-        }
-        return prefix + body;
-    }
-
-    function buildDialoguePrefix(line) {
-        const name = line.characterName || '';
-        let s = '';
-        if (line.nameDisplayType === 'Unknown') s += '?';
-        s += name;
-        if (line.nameDisplayType === 'Communicator') s += '(c)';
-        s += ': ' + line.dialogue;
-        return s;
-    }
-
-    function appendCommands(commands) {
-        if (!commands || commands.length === 0) return '';
-        return commands.map(c => ' ; ' + c).join('');
-    }
-
-    // ----- Public API -----
-
-    global.YarnConverter = {
-        buildSO,
-        applyTranslations,
-        serializeJson,
-        resolveCharacterName,
-        // 暴露給 UI 看每行屬性（例如 dialogue/option 的 UID）
-        parseLine,
-    };
+    global.YarnConverter = { buildSO };
 })(typeof window !== 'undefined' ? window : globalThis);

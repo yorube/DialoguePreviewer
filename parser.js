@@ -16,8 +16,6 @@
 // Drops: <<Play>>, <<PlayUntil>>, <<CloseCommunicator>>, // comments, blank lines.
 
 (function (global) {
-  const COMMAND_RE = /<<\s*([\s\S]*?)\s*>>/;
-
   // Strip TMP markup completely (visible text only). Used in places where we
   // can't render HTML, e.g. node titles or fallbacks.
   function stripMarkup(s) {
@@ -365,7 +363,6 @@
         continue;
       }
 
-      if (cl === null) { i++; continue; }   // dropped (animation etc.)
       cl.srcLine = t.srcLine;
       out.push(cl);
       i++;

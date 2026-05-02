@@ -100,8 +100,6 @@
             white-space: nowrap;
             align-self: center;
         }
-        .t-stats .stat-good { color: #88e088; }
-        .t-stats .stat-warn { color: #e0c060; }
         .t-export-status {
             font-size: 11px;
             font-family: ui-monospace, "Cascadia Code", monospace;

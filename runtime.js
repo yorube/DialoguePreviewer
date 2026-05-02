@@ -388,6 +388,7 @@
   }
 
   global.YarnRuntime = YarnRuntime;
-  global.YarnRuntime.evalExpr = evalExpr;                       // exposed for debugging
-  global.YarnRuntime.readDeclaredDefaults = readDeclaredDefaults; // used by the vars panel pre-runtime
+  // Used by ui.js's vars panel to populate declared defaults before any
+  // node has been started, so translators can pre-set branch flags.
+  global.YarnRuntime.readDeclaredDefaults = readDeclaredDefaults;
 })(typeof window !== 'undefined' ? window : globalThis);

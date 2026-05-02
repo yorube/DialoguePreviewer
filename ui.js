@@ -66,7 +66,6 @@
       'btn.compareLangs': '📊 Compare languages',
       'btn.compareLangs.tip': 'Swap the dialogue panel for a side-by-side translation table of the active node. Click any non-source cell to edit. Press Esc to exit.',
       'btn.resetOverrides': '🔄 Reset overrides ({n})',
-      'compare.title': 'Translation comparison',
       'compare.tip': 'Each row is one translatable line / option in the current node. Cells show the displayed text per language (imported file + inline edits applied).',
       'compare.col.line': 'Line',
       'compare.col.kind': 'Kind',
@@ -83,7 +82,6 @@
       'compare.legend.untranslated': 'Untranslated (falls back to source)',
       'compare.legend.override': 'Inline edit',
       'compare.editHint': '✏️ Click any non-source cell to edit (Ctrl+Enter saves, Esc cancels). Use 💾 Export above to save to .csv / .xlsx.',
-      'compare.openInEdit': 'Edit in this language',
       'sidebar.nodes': 'Nodes',
       'sidebar.uidSearch': 'UID Search',
       'sidebar.uidSearch.placeholder': 'Paste UID…',
@@ -155,7 +153,6 @@
       'tr.stats.notLoaded': '{locale}: no translation file loaded',
       'tr.stats.loaded': '{locale}: baseline {b} / inline edits {o}',
       'tr.stats.loadedFile': ' ({file})',
-      'tr.stats.loading': 'Loading translation tables…',
       'tr.stats.progress': '{done} / {total} translated',
       'tr.progress.translated': 'translated',
       'tr.alert.pickLocale': 'Please switch the Language selector to your target language (e.g. fr-FR / ru-RU) before importing.',
@@ -252,7 +249,6 @@
       'btn.compareLangs': '📊 對照各語言',
       'btn.compareLangs.tip': '把對話區換成多語言對照表（當前節點），可以直接點任一非原文格修改譯文。Esc 退出。',
       'btn.resetOverrides': '🔄 重置覆寫 ({n})',
-      'compare.title': '翻譯對照表',
       'compare.tip': '每一列是當前節點裡一條可翻譯的對話/選項。每格顯示該語言實際會被看到的文字（已套用匯入檔 + 站內編輯）。',
       'compare.col.line': '行號',
       'compare.col.kind': '類型',
@@ -269,7 +265,6 @@
       'compare.legend.untranslated': '未翻譯（回退原文）',
       'compare.legend.override': '站內編輯',
       'compare.editHint': '✏️ 點任一非原文欄位即可編輯（Ctrl+Enter 儲存、Esc 取消）。要存檔請用上方 💾 匯出 .csv / .xlsx。',
-      'compare.openInEdit': '切到此語言並進入 Edit Mode',
       'sidebar.nodes': '節點清單',
       'sidebar.uidSearch': 'UID 搜尋',
       'sidebar.uidSearch.placeholder': '貼上 UID…',
@@ -341,7 +336,6 @@
       'tr.stats.notLoaded': '{locale}：尚未載入譯文檔',
       'tr.stats.loaded': '{locale}：基準 {b} 條 / 站內編輯 {o} 條',
       'tr.stats.loadedFile': '（{file}）',
-      'tr.stats.loading': '載入翻譯對照表中…',
       'tr.stats.progress': '{done} / {total} 已翻譯',
       'tr.progress.translated': '已翻譯',
       'tr.alert.pickLocale': '請先在右上「Language」切換到要載入的目標語言（如 fr-FR / ru-RU）。',
@@ -495,6 +489,7 @@
     noteLoadedFor: null,            // {group, title} the textarea is bound to
     compareMode: false,             // Compare Mode (full-page side-by-side)
     lastVarValues: {},              // previous var values for change badges
+    guidsRev: null,                 // {guid → en-US filename}, lazily loaded
   };
 
   function activeProject() {
