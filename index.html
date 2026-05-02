@@ -112,8 +112,10 @@
     <!-- Edit Mode 切換放在 node 標題下方一行 -->
     <div class="dialogue-modebar" id="dialogue-modebar"></div>
     <div class="dialogue-toolbar">
-      <button id="back-line-btn" class="action-btn" title="←" data-i18n="btn.stepBack">← Step back</button>
-      <button id="replay-btn" class="action-btn" title="R" data-i18n="btn.replayNode">⟳ Replay this node</button>
+      <button id="play-btn" class="action-btn primary" type="button"
+        data-i18n="btn.play" data-i18n-title="btn.play.tip" title="Space / Enter">▶ Play</button>
+      <button id="back-line-btn" class="action-btn" title="← / Backspace" data-i18n="btn.stepBack">← Step back</button>
+      <button id="replay-btn" class="action-btn" title="R" data-i18n="btn.replayNode">⟳ Replay</button>
       <button id="note-toggle" class="action-btn note-toggle-btn" type="button"
         data-i18n="btn.openNote" title="Open notes tab">📝 Note</button>
     </div>

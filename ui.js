@@ -59,7 +59,9 @@
       'topbar.uiLang': 'Interface language',
       'page.dialogue': '💬 Dialogue',
       'page.uiStrings': '🧩 UI Strings',
-      'btn.replayNode': '⟳ Replay this node',
+      'btn.play': '▶ Play',
+      'btn.play.tip': 'Start the dialogue runtime from line 1 of this node (Space / Enter / R).',
+      'btn.replayNode': '⟳ Replay',
       'btn.stepBack': '← Step back',
       'btn.continue': '▼ Continue (Space)',
       'btn.openNote': '📝 Note',
@@ -109,6 +111,7 @@
       'error.loadFailedFile': 'Failed to load: {file}\n{msg}',
       'transcript.dialogueEnded': '— Dialogue ended —',
       'transcript.jumpTo': '→ Jump to node: {title}',
+      'transcript.pressPlay': 'Press ▶ Play to step through the dialogue, or open Translation Edit Mode to edit this node\'s lines directly.',
       'tooltip.overridden': 'Overridden by user',
       'tooltip.rewind': 'Rewind to this line',
       'tooltip.gender': 'Grammatical gender (for translation)',
@@ -242,7 +245,9 @@
       'topbar.uiLang': '介面語言',
       'page.dialogue': '💬 對話',
       'page.uiStrings': '🧩 UI 字串',
-      'btn.replayNode': '⟳ 從本節點重看',
+      'btn.play': '▶ 撥放',
+      'btn.play.tip': '從本節點第 1 行開始跑對話 runtime（Space / Enter / R）。',
+      'btn.replayNode': '⟳ 重看',
       'btn.stepBack': '← 退一行',
       'btn.continue': '▼ 繼續 (Space)',
       'btn.openNote': '📝 筆記',
@@ -292,6 +297,7 @@
       'error.loadFailedFile': '載入失敗：{file}\n{msg}',
       'transcript.dialogueEnded': '— 對話結束 —',
       'transcript.jumpTo': '→ 跳到節點：{title}',
+      'transcript.pressPlay': '按 ▶ 撥放可以一步步跑對話；或者開啟 Translation Edit Mode 直接編輯這個節點的所有對話。',
       'tooltip.overridden': '使用者覆寫',
       'tooltip.rewind': '退回到此句',
       'tooltip.gender': '文法性別（翻譯用）',
@@ -835,9 +841,10 @@
       return;
     }
 
-    // Switch to that node (this also sets state.runtime.currentNodeTitle, so
-    // getDisplayedText below picks up overrides for the active locale).
-    startAt(nodeTitle);
+    // Navigate to the node — UID search is "find this exact line", not
+    // "play through it". The translator usually wants to land on the line in
+    // context, not be forced into a runtime tick.
+    navigateToNode(nodeTitle);
 
     const node = proj.nodes.get(nodeTitle);
     const hit = findStatementBySrcLine(node.statements, srcLine);
@@ -966,17 +973,23 @@
     }
     refreshNodeList();
     const proj = activeProject();
-    const wasViewing = state.runtime && state.runtime.currentNodeTitle;
-    if (wasViewing && proj.nodes.has(wasViewing)) {
-      // Locale change while mid-dialogue: stay on the current node so the
-      // translator's place isn't lost.
-      startAt(wasViewing);
+    // Preserve which node the translator was on across locale / script swaps
+    // so they don't lose their place. Playback intent is preserved too: if
+    // they were actively playing that node, re-play it (so getDisplayedText
+    // shows the new locale's text); if they were just navigating, stay in
+    // navigation-only mode.
+    const wasPlaying = !!state.runtime;
+    const lastNode = currentNodeTitle();
+    if (lastNode && proj.nodes.has(lastNode)) {
+      navigateToNode(lastNode);
+      if (wasPlaying) playFromCurrentNode();
     } else {
-      // Fresh script load: don't auto-start a node. Populate the variables
-      // panel from declared defaults so the translator can pre-set
-      // branch-relevant flags before clicking any node.
+      // Fresh script load with no carried-over node: clear to a known empty
+      // state. Vars panel still shows declared defaults so the translator
+      // can pre-set branch-relevant flags before picking a node.
       state.runtime = null;
       state.snapshots = [];
+      state.lastVarValues = {};
       $('transcript').innerHTML = '';
       $('current-node').textContent = '—';
       const flat = document.getElementById('flat-edit-view');
@@ -985,6 +998,7 @@
       updateBackBtn();
       renderVars();
       syncActiveNodeInList();
+      refreshPlaybackUi();
     }
     // Refresh translation stats / progress now that the active script or
     // locale data has finished loading — getActiveProjectUids depends on
@@ -1053,7 +1067,7 @@
       noteBtn.title = hasNote ? 'Has note — click to open' : 'Add note';
       noteBtn.addEventListener('click', e => {
         e.stopPropagation();
-        startAt(title);
+        navigateToNode(title);
         openNote();
       });
 
@@ -1061,18 +1075,17 @@
       li.appendChild(ttl);
       li.appendChild(noteBtn);
       li.title = title;
-      li.onclick = () => startAt(title);
+      li.onclick = () => navigateToNode(title);
       frag.appendChild(li);
     });
     list.appendChild(frag);
     $('node-count').textContent = `(${titles.length})`;
   }
 
-  // Sync the .is-active class on the node-list. Pass `title` explicitly when
-  // you have it (e.g. from startAt before runtime.start() has run, when
-  // state.runtime.currentNodeTitle is still null). Falls back to the
-  // runtime's title for callers that just want "whatever is current" (mid-
-  // dialogue jumps, snapshot restore, etc).
+  // Sync the .is-active class on the node-list. Pass `title` explicitly
+  // from navigation paths (we have it directly); omit it from playback
+  // paths (mid-dialogue jumps, snapshot restore) to fall back to the
+  // runtime's currentNodeTitle.
   function syncActiveNodeInList(title) {
     const list = $('node-list');
     if (!list) return;
@@ -1218,10 +1231,9 @@
     return new Set(Object.keys(notesStore()[group] || {}));
   }
 
-  // Bind the note panel to a specific node title. We take the title as a
-  // parameter — not state.runtime.currentNodeTitle — because callers like
-  // startAt() invoke us BEFORE runtime.start() runs (currentNodeTitle would
-  // still be null then and the load would silently miss the saved note).
+  // Bind the note panel to a specific node title. Takes title as a
+  // parameter so it works in both navigation-only and playback states,
+  // independent of whether state.runtime is set.
   function loadNoteForNode(title) {
     flushPendingNote();
     if (!state.activeGroup || !title) {
@@ -1419,11 +1431,10 @@
         btn.className = 'var-reset-btn';
         btn.addEventListener('click', () => {
           state.varOverrides.clear();
-          // Mid-dialogue: replay the active node so the cleared overrides
-          // re-evaluate from the first line. Pre-runtime: just re-render
+          // Mid-playback: re-play the active node so the cleared overrides
+          // re-evaluate from the first line. Navigation-only: just re-render
           // the panel so values fall back to declared defaults.
-          const title = state.runtime && state.runtime.currentNodeTitle;
-          if (title) startAt(title);
+          if (state.runtime) playFromCurrentNode();
           else renderVars();
         });
         panel.appendChild(btn);
@@ -1478,7 +1489,8 @@
     if (!enEntry) return null;
     const proj = activeProject();
     if (!proj) return null;
-    const nodeTitle = state.runtime && state.runtime.currentNodeTitle;
+    // currentNodeTitle() works in both navigation-only and playback states.
+    const nodeTitle = currentNodeTitle();
     if (!nodeTitle) return null;
     const nodeData = proj.nodes.get(nodeTitle);
     if (!nodeData || nodeData.nodeIndex == null) return null;
@@ -1607,7 +1619,9 @@
     view.innerHTML = '';
     const proj = activeProject();
     if (!proj) return;
-    const title = state.runtime && state.runtime.currentNodeTitle;
+    // Edit Mode is independent of playback — use the canonical title source
+    // so the flat view follows navigation, not just the runtime.
+    const title = currentNodeTitle();
     if (!title) return;
     const node = proj.nodes.get(title);
     if (!node) return;
@@ -1761,7 +1775,10 @@
     const proj = activeProject();
     const ownerNode = proj && proj.globalLabels && proj.globalLabels.get(labelName);
     if (!ownerNode) return;  // unknown label — silent no-op
-    startAt(ownerNode);       // re-renders flat view for the owner node
+    // Edit Mode flat view — jumping to a label in another node is a
+    // navigation action, not a playback action. navigateToNode triggers
+    // refreshAuxModes which re-renders the flat view for the owner node.
+    navigateToNode(ownerNode);
     target = view.querySelector(sel);
     if (target) flashFlatTarget(target);
   }
@@ -1932,8 +1949,10 @@
     const view = $('compare-view');
     if (!view) return;
 
+    // Compare Mode is independent of playback — follows the active node
+    // whether or not the runtime is currently running.
     const group = state.activeGroup;
-    const nodeTitle = state.runtime && state.runtime.currentNodeTitle;
+    const nodeTitle = currentNodeTitle();
     if (!group || !nodeTitle) {
       view.innerHTML = `<div class="compare-empty-state">${t('compare.noNode')}</div>`;
       return;
@@ -2259,6 +2278,7 @@
     appendCurrent();
     renderActions();
     pushSnapshot();
+    if (state.runtime.ended) refreshPlaybackUi();
   }
 
   function chooseForward(idx, text) {
@@ -2268,6 +2288,7 @@
     appendCurrent();
     renderActions();
     pushSnapshot();
+    if (state.runtime.ended) refreshPlaybackUi();
   }
 
   // Append the current event to the transcript (forward-flow only).
@@ -2319,7 +2340,7 @@
     setActiveNode(target.nodeTitle);
     renderActions();
     renderVars();
-    updateBackBtn();
+    refreshPlaybackUi();   // covers updateBackBtn + Play visibility (runtime.ended may flip)
     const tEl = $('transcript');
     tEl.scrollTop = tEl.scrollHeight;
   }
@@ -2406,7 +2427,7 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // §15 Dialogue glue (startAt / setActiveNode)
+  // §15 Dialogue glue (navigateToNode / playFromCurrentNode / setActiveNode)
   // ─────────────────────────────────────────────────────────────────────────
 
   // Single source of truth for "the active node": keeps the header chip,
@@ -2416,41 +2437,117 @@
     $('current-node').textContent = title;
     renderSource(title);
     loadNoteForNode(title);
-    // Pass title explicitly: syncActiveNodeInList might be called from
-    // startAt before runtime.start() has set state.runtime.currentNodeTitle.
     syncActiveNodeInList(title);
   }
 
-  function startAt(nodeTitle) {
+  // Two-state playback model:
+  //   navigateToNode(title)     → runtime = null (read-only browsing)
+  //   playFromCurrentNode()     → constructs + starts the runtime
+  // The "constructed-but-not-started" middle state that used to exist inside
+  // startAt is gone, so any code that reads state.runtime sees a binary:
+  // either there is one and it's running, or there isn't.
+
+  function navigateToNode(title) {
     const proj = activeProject();
-    if (!proj) return;
-    if (!proj.nodes.has(nodeTitle)) {
-      alert(t('error.nodeNotFound', { title: nodeTitle }));
+    if (!proj || !title) return;
+    if (!proj.nodes.has(title)) {
+      alert(t('error.nodeNotFound', { title }));
+      return;
+    }
+    state.runtime = null;
+    state.snapshots = [];
+    state.lastVarValues = {};
+    $('transcript').innerHTML = '';
+    setActiveNode(title);
+    removePendingActions();
+    renderVars();              // declared defaults + user overrides
+    refreshPlaybackUi();       // toggle play vs step-back/replay enable
+    renderEmptyState();        // "press ▶ to start" placeholder
+    // Edit Mode and Compare Mode follow the active node directly — they
+    // never needed the runtime, so they refresh on navigation now.
+    refreshAuxModes();
+  }
+
+  function playFromCurrentNode() {
+    const proj = activeProject();
+    const title = state.runtime ? state.runtime.currentNodeTitle : currentNodeTitle();
+    if (!proj || !title) return;
+    if (!proj.nodes.has(title)) {
+      alert(t('error.nodeNotFound', { title }));
       return;
     }
     state.runtime = new YarnRuntime(proj);
-    // Reset the var-change-badge baseline. runtime.start() will re-prime
-    // this.vars from declarations + overrides; the first <<set>> in the
-    // node fires onVarChange, where handleVarChange compares against ∅ for
-    // any name not yet seen this session — that's the correct UX.
     state.lastVarValues = {};
     state.runtime.onVarChange = handleVarChange;
-    $('transcript').innerHTML = '';
-    setActiveNode(nodeTitle);
     state.snapshots = [];
-    state.runtime.start(nodeTitle, state.varOverrides);
+    $('transcript').innerHTML = '';
+    state.runtime.start(title, state.varOverrides);
     renderVars();
     appendCurrent();
     renderActions();
     pushSnapshot();
-    // If Edit Mode is on, refresh the flat view so it follows the active node.
+    refreshPlaybackUi();
+    refreshAuxModes();
+  }
+
+  // Read whichever node is currently focused — runtime title preferred when
+  // playing, falls back to the dialogue header (set by setActiveNode).
+  function currentNodeTitle() {
+    if (state.runtime && state.runtime.currentNodeTitle) {
+      return state.runtime.currentNodeTitle;
+    }
+    const headerTxt = $('current-node').textContent;
+    return (headerTxt && headerTxt !== '—') ? headerTxt : null;
+  }
+
+  function refreshAuxModes() {
     if (typeof TranslationUI !== 'undefined' && TranslationUI.isActive && TranslationUI.isActive()) {
       redrawTranslationsInPlace();
     }
-    // Compare Mode: rebuild the comparison table for the new active node.
     if (state.compareMode) {
       renderCompareView().catch(err => console.error('[compare]', err));
     }
+  }
+
+  // Show / hide the empty-state placeholder when the transcript has no rows.
+  // Cleared automatically by appendCurrent / appendChoiceActions writing into
+  // the transcript, which knock the placeholder out of sight.
+  function renderEmptyState() {
+    const tEl = $('transcript');
+    if (!tEl) return;
+    const playing = !!state.runtime;
+    const title = currentNodeTitle();
+    if (playing || !title) {
+      const ph = tEl.querySelector('.transcript-empty');
+      if (ph) ph.remove();
+      return;
+    }
+    if (tEl.querySelector('.transcript-empty')) return;
+    const ph = document.createElement('div');
+    ph.className = 'transcript-empty';
+    ph.innerHTML =
+      `<div class="transcript-empty-icon">▶</div>` +
+      `<div class="transcript-empty-text" data-i18n="transcript.pressPlay"></div>`;
+    tEl.appendChild(ph);
+    applyI18n();
+  }
+
+  // Sync the dialogue toolbar to the current playback state.
+  //   ▶ Play       — hidden mid-playback; visible (and primary CTA) when
+  //                  navigating, ended, or no node selected
+  //   ⟳ Replay     — always present; only meaningful with a node selected
+  //   ← Step back  — handled by updateBackBtn (snapshot-count aware)
+  function refreshPlaybackUi() {
+    const playing = !!state.runtime && !state.runtime.ended;
+    const hasNode = !!currentNodeTitle();
+    const playBtn = $('play-btn');
+    const replayBtn = $('replay-btn');
+    if (playBtn) {
+      playBtn.disabled = !hasNode;
+      playBtn.hidden = playing;
+    }
+    if (replayBtn) replayBtn.disabled = !hasNode;
+    updateBackBtn();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2465,6 +2562,11 @@
 
     // Topbar version display.
     $('app-version').textContent = 'v' + VERSION;
+
+    // Toolbar starts in "no node selected" state — Play disabled, Step
+    // back / Replay disabled. loadAndShowCurrent will refresh once a
+    // script + locale combination loads.
+    refreshPlaybackUi();
 
     // Source font controls.
     $('src-zoom-in').addEventListener('click', () => bumpSourceFontSize(+1));
@@ -2539,9 +2641,9 @@
     $('ui-lang-select').addEventListener('change', e => setLang(e.target.value));
 
     // Dialogue toolbar buttons.
+    $('play-btn').addEventListener('click', playFromCurrentNode);
     $('replay-btn').addEventListener('click', () => {
-      const title = state.runtime?.currentNodeTitle;
-      if (title) startAt(title);
+      if (currentNodeTitle()) playFromCurrentNode();
     });
     $('back-line-btn').addEventListener('click', backLine);
 
@@ -2682,16 +2784,22 @@
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
       if (e.target.isContentEditable) return;
       if (e.key === ' ' || e.key === 'Enter') {
+        // Playback advance vs first-press play: same key does both, which
+        // matches the visual model — pressing space when the play button is
+        // showing does the same thing as clicking it.
         const cont = document.querySelector('.continue-btn');
-        if (cont) { e.preventDefault(); cont.click(); }
+        if (cont) { e.preventDefault(); cont.click(); return; }
+        if (!state.runtime && currentNodeTitle()) {
+          e.preventDefault(); playFromCurrentNode();
+        }
       } else if (/^[1-9]$/.test(e.key)) {
         const btns = document.querySelectorAll('.choice-btn');
         const btn = btns[parseInt(e.key, 10) - 1];
         if (btn) { e.preventDefault(); btn.click(); }
       } else if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault(); $('replay-btn').click();
+        if (currentNodeTitle()) { e.preventDefault(); playFromCurrentNode(); }
       } else if (e.key === 'ArrowLeft' || e.key === 'Backspace') {
-        e.preventDefault(); $('back-line-btn').click();
+        if (state.runtime) { e.preventDefault(); backLine(); }
       }
     });
   }

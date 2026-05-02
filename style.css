@@ -669,7 +669,10 @@ body.dragging-splitter * { user-select: none; }
 }
 
 /* ============================================================================
-   Button system — secondary pill (the only tier we currently emit)
+   Button system — pill, two tiers
+   - .action-btn          → secondary outline (default toolbar button)
+   - .action-btn.primary  → primary CTA (filled accent, used by ▶ Play)
+   - [hidden]             → fully removed from layout (Play button while playing)
    ============================================================================ */
 
 .action-btn {
@@ -689,6 +692,7 @@ body.dragging-splitter * { user-select: none; }
   height: 36px;
   white-space: nowrap;
 }
+.action-btn[hidden] { display: none; }
 .action-btn:hover:not(:disabled) {
   background: var(--bg-3);
   color: var(--fg);
@@ -700,6 +704,23 @@ body.dragging-splitter * { user-select: none; }
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-faint);
+}
+
+.action-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+.action-btn.primary:hover:not(:disabled) {
+  background: var(--accent-hi);
+  border-color: var(--accent-hi);
+  color: var(--accent-fg);
+}
+.action-btn.primary:disabled {
+  background: transparent;
+  color: var(--fg-faint);
+  border-color: var(--line);
 }
 
 /* Note button highlights when current node has a note */
@@ -725,6 +746,34 @@ body.dragging-splitter * { user-select: none; }
   width: 100%;
   margin: 0 auto;
 }
+
+/* Empty-state placeholder shown when a node is selected but no runtime is
+   playing yet. Cleared automatically as soon as the runtime appends rows. */
+.transcript-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--s-3);
+  color: var(--fg-dim);
+  padding: var(--s-7) var(--s-5);
+  margin-top: var(--s-6);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--accent) 3%, transparent);
+}
+.transcript-empty-icon {
+  font-size: 32px;
+  color: var(--accent);
+  line-height: 1;
+}
+.transcript-empty-text {
+  font-size: var(--t-body);
+  max-width: 42ch;
+  line-height: 1.6;
+}
+
 
 .row {
   position: relative;
