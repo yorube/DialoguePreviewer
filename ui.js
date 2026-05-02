@@ -167,7 +167,6 @@
       'tr.alert.warnings': '\n\n⚠️ Warnings:\n  {head}',
       'tr.alert.warningsMore': '\n  …({n} more, see console)',
       'tr.alert.persistFailed': '⛔ Could not save {locale} translations to browser storage (file: {file}).\n\nThe import is shown but WILL BE LOST if you refresh.\nClear other site data or use a different browser profile, then import again.',
-      'tr.alert.persistSlim': '\n\nℹ️ Storage near full — translations were saved but the original file structure was dropped (Export will rebuild from the en-US AST).',
       'tr.alert.noBaseline': 'No translation file imported yet. Please import first, then edit + export.',
       'tr.alert.noSource': 'Source structure missing (probably dropped due to localStorage quota). Please re-import your original .csv / .xlsx, then export.',
       'tr.alert.downloadFailed': 'Failed to write translation file: {msg}',
@@ -354,7 +353,6 @@
       'tr.alert.warnings': '\n\n⚠️ 警告：\n  {head}',
       'tr.alert.warningsMore': '\n  …（再 {n} 條，請看 console）',
       'tr.alert.persistFailed': '⛔ 無法將 {locale} 譯文存入瀏覽器（檔案：{file}）。\n\n畫面顯示了匯入結果，但**重新整理就會消失**。\n請清掉其他網站資料或換一個瀏覽器設定檔，再重新匯入。',
-      'tr.alert.persistSlim': '\n\nℹ️ 儲存空間接近滿載——譯文已存，但原檔結構被丟棄（匯出時會用 en-US AST 重建）。',
       'tr.alert.noBaseline': '尚未匯入任何譯文檔。請先匯入，編輯完再匯出。',
       'tr.alert.noSource': '找不到當初匯入檔案的結構（可能 localStorage 容量不夠被丟掉）。請重新匯入一次原始 .csv / .xlsx，再匯出。',
       'tr.alert.downloadFailed': '產出譯文檔失敗：{msg}',
@@ -1012,7 +1010,7 @@
     });
   }
 
-  function refreshNodeList() {
+  function refreshNodeList(activeTitleHint) {
     const list = $('node-list');
     list.innerHTML = '';
     const proj = activeProject();
@@ -1033,7 +1031,11 @@
     // regardless of sort order or active filter.
     const padWidth = String(titles.length).length;
     const noted = state.activeGroup ? notedTitlesIn(state.activeGroup) : new Set();
-    const activeTitle = activeNodeTitle();
+    // Same caveat as syncActiveNodeInList: refreshNodeList is sometimes
+    // called before runtime.start() — accept an explicit title via the
+    // parameter, otherwise fall back to runtime.
+    const activeTitle = activeTitleHint
+      || (state.runtime && state.runtime.currentNodeTitle) || null;
     const frag = document.createDocumentFragment();
     titles.forEach((title, i) => {
       const li = document.createElement('li');
@@ -1072,25 +1074,17 @@
     $('node-count').textContent = `(${titles.length})`;
   }
 
-  // The canonical "currently active node title" is the dialogue header text,
-  // because setActiveNode writes there before runtime.start() runs. Reading
-  // state.runtime.currentNodeTitle from inside startAt would return null —
-  // the runtime is constructed but not started yet at that point.
-  function activeNodeTitle() {
-    if (state.runtime && state.runtime.currentNodeTitle) {
-      return state.runtime.currentNodeTitle;
-    }
-    const headerTxt = $('current-node').textContent;
-    return (headerTxt && headerTxt !== '—') ? headerTxt : null;
-  }
-
-  // Update the .is-active class on the node-list <li> for the current node
-  // without rebuilding the whole list. Called from setActiveNode so the
-  // highlight follows mid-dialogue jumps and sidebar clicks alike.
-  function syncActiveNodeInList() {
+  // Sync the .is-active class on the node-list. Pass `title` explicitly when
+  // you have it (e.g. from startAt before runtime.start() has run, when
+  // state.runtime.currentNodeTitle is still null). Falls back to the
+  // runtime's title for callers that just want "whatever is current" (mid-
+  // dialogue jumps, snapshot restore, etc).
+  function syncActiveNodeInList(title) {
     const list = $('node-list');
     if (!list) return;
-    const activeTitle = activeNodeTitle();
+    const activeTitle = title != null
+      ? title
+      : (state.runtime && state.runtime.currentNodeTitle) || null;
     let activeLi = null;
     for (const li of list.querySelectorAll('li')) {
       const on = li.dataset.nodeTitle === activeTitle;
@@ -2418,7 +2412,9 @@
     $('current-node').textContent = title;
     renderSource(title);
     loadNoteForNode(title);
-    syncActiveNodeInList();
+    // Pass title explicitly: syncActiveNodeInList might be called from
+    // startAt before runtime.start() has set state.runtime.currentNodeTitle.
+    syncActiveNodeInList(title);
   }
 
   function startAt(nodeTitle) {

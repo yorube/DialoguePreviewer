@@ -38,34 +38,28 @@
 
         // ----- Persistence -----
 
-        // Returns: 'full' | 'slim' | 'failed'.
-        // 'failed' means localStorage write was rejected even after dropping
-        // the source rows — caller should surface this so the translator
-        // doesn't lose work after a refresh.
+        // Persist only what's load-bearing: the translator's work (baseline +
+        // overrides) and lightweight metadata. state.source (the raw xlsx /
+        // csv rows) is intentionally NOT persisted — it can run several MB
+        // and was the sole cause of localStorage quota failures. After a
+        // refresh, getSource() returns null and onDownloadLocFile falls back
+        // to buildSyntheticSource() (rebuilds the LocKit CSV from the en-US
+        // AST). The trade-off: byte-for-byte identical re-export across
+        // refresh is lost; data integrity is unconditional.
+        // Returns: 'ok' | 'failed'.
         function persist() {
-            const fullPayload = {
+            const payload = {
                 v: STORAGE_VERSION,
                 locale: state.locale,
                 baseline: Array.from(state.baseline.entries()),
                 overrides: Array.from(state.overrides.entries()),
                 sourceMeta: state.sourceMeta,
-                source: state.source,
             };
             try {
-                localStorage.setItem(storageKey, JSON.stringify(fullPayload));
-                state.lastPersistMode = 'full';
-                return 'full';
+                localStorage.setItem(storageKey, JSON.stringify(payload));
+                return 'ok';
             } catch (e) {
-                console.warn('[TranslationState] full persist failed, dropping source:', e.message);
-            }
-            try {
-                const slim = Object.assign({}, fullPayload, { source: null });
-                localStorage.setItem(storageKey, JSON.stringify(slim));
-                state.lastPersistMode = 'slim';
-                return 'slim';
-            } catch (e2) {
-                console.error('[TranslationState] slim persist also failed:', e2.message);
-                state.lastPersistMode = 'failed';
+                console.error('[TranslationState] persist failed:', e.message);
                 return 'failed';
             }
         }
@@ -79,6 +73,10 @@
                 if (Array.isArray(obj.baseline)) state.baseline = new Map(obj.baseline);
                 if (Array.isArray(obj.overrides)) state.overrides = new Map(obj.overrides);
                 if (obj.sourceMeta) state.sourceMeta = obj.sourceMeta;
+                // obj.source is no longer persisted (see persist()). Old
+                // payloads written before this change may still carry it;
+                // honor those so users don't lose their cached source on
+                // first load after the upgrade.
                 if (obj.source) state.source = obj.source;
             } catch (e) {
                 console.warn('[TranslationState] load failed:', e);

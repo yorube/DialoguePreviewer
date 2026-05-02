@@ -484,17 +484,16 @@
             withTranslation: parsed.stats.withTranslation,
         }, { source: parsed.source });
 
-        if (persistResult === 'failed') {
-            // baseline lives only in memory — refresh will lose it. Tell the
-            // user explicitly and DON'T touch notes (we don't want a partial-
-            // success state where notes outlive the translations they
-            // belonged to).
+        if (persistResult !== 'ok') {
+            // Persist refused (browser localStorage is full from other apps,
+            // or this locale's translation map alone exceeds the quota).
+            // baseline lives only in memory — refresh will lose it. Don't
+            // touch notes either; we don't want notes outliving the
+            // translations they belonged to across a refresh.
             alert(t('tr.alert.persistFailed', {
                 locale: activeLocale,
                 file: parsed.stats.sourceFile,
             }));
-            // Hand display refresh a best-effort run anyway so the in-memory
-            // import is at least visible until the page is closed.
             try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
             try { if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw(); }
             catch (e) { console.error('[requestRedraw]', e); }
@@ -525,15 +524,13 @@
         const warningSummary = parsed.warnings.length
             ? t('tr.alert.warnings', { head }) + more
             : '';
-        const persistNote = persistResult === 'slim'
-            ? t('tr.alert.persistSlim') : '';
         alert(t('tr.alert.loaded', {
             locale: activeLocale,
             file: parsed.stats.sourceFile,
             total: parsed.stats.totalRows,
             translated: parsed.stats.withTranslation,
             missing: parsed.stats.missingUid,
-        }) + persistNote + warningSummary);
+        }) + warningSummary);
 
         // Both display-refresh paths are isolated — a thrown updateStats
         // (e.g. en-US not loaded for the active script yet) must not block
@@ -795,7 +792,7 @@
         ok.addEventListener('click', () => {
             const newText = ta.value;
             const persistResult = ts.setOverride(uid, newText);
-            if (persistResult === 'failed') {
+            if (persistResult !== 'ok') {
                 alert(t('tr.alert.persistFailed', {
                     locale: STATE.hooks.getActiveLocale(), file: '(inline edit)',
                 }));
