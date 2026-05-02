@@ -505,9 +505,6 @@
         let notesRestored = 0;
         try {
             notesRestored = restoreNotesFromSource(parsed.source);
-            if (notesRestored) {
-                console.log(`[translation-ui] restored ${notesRestored} translator notes from import`);
-            }
         } catch (e) {
             console.error('[translation-ui] note restore failed:', e);
         }
@@ -524,13 +521,16 @@
         const warningSummary = parsed.warnings.length
             ? t('tr.alert.warnings', { head }) + more
             : '';
+        const notesLine = notesRestored
+            ? t('tr.alert.notesRestored', { n: notesRestored })
+            : '';
         alert(t('tr.alert.loaded', {
             locale: activeLocale,
             file: parsed.stats.sourceFile,
             total: parsed.stats.totalRows,
             translated: parsed.stats.withTranslation,
             missing: parsed.stats.missingUid,
-        }) + warningSummary);
+        }) + notesLine + warningSummary);
 
         // Both display-refresh paths are isolated — a thrown updateStats
         // (e.g. en-US not loaded for the active script yet) must not block
@@ -1142,7 +1142,9 @@
         getUidFor,
         setOverrideForLocale,
         setEditMode: setMode,
-        notifyLocaleChange: () => updateStats(),
+        // Host calls this after the active script or active locale changes
+        // (anywhere the in-memory project / locale data has been swapped).
+        notifyContextChange: () => updateStats(),
         isActive: () => STATE.translationMode,
         refreshExportStatus,
     };

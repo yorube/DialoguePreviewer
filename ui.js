@@ -157,7 +157,6 @@
       'tr.stats.loadedFile': ' ({file})',
       'tr.stats.loading': 'Loading translation tables…',
       'tr.stats.progress': '{done} / {total} translated',
-      'tr.progress.label': '{done} / {total} translated',
       'tr.progress.translated': 'translated',
       'tr.alert.pickLocale': 'Please switch the Language selector to your target language (e.g. fr-FR / ru-RU) before importing.',
       'tr.alert.sourceLocale': 'Translation import only applies to target languages. {locale} is a source language (text comes FROM it, not into it).\n\nWhat to do:\n  1. Switch the "Text language" selector to a target language (ru-RU / fr-FR / it-IT / es-ES / ja-JP).\n  2. Then import the matching translation file (e.g. Loc_ru-RU.csv).',
@@ -167,6 +166,7 @@
       'tr.alert.warnings': '\n\n⚠️ Warnings:\n  {head}',
       'tr.alert.warningsMore': '\n  …({n} more, see console)',
       'tr.alert.persistFailed': '⛔ Could not save {locale} translations to browser storage (file: {file}).\n\nThe import is shown but WILL BE LOST if you refresh.\nClear other site data or use a different browser profile, then import again.',
+      'tr.alert.notesRestored': '\n  📝 translator notes restored: {n}',
       'tr.alert.noBaseline': 'No translation file imported yet. Please import first, then edit + export.',
       'tr.alert.noSource': 'Source structure missing (probably dropped due to localStorage quota). Please re-import your original .csv / .xlsx, then export.',
       'tr.alert.downloadFailed': 'Failed to write translation file: {msg}',
@@ -343,7 +343,6 @@
       'tr.stats.loadedFile': '（{file}）',
       'tr.stats.loading': '載入翻譯對照表中…',
       'tr.stats.progress': '{done} / {total} 已翻譯',
-      'tr.progress.label': '{done} / {total} 已翻譯',
       'tr.progress.translated': '已翻譯',
       'tr.alert.pickLocale': '請先在右上「Language」切換到要載入的目標語言（如 fr-FR / ru-RU）。',
       'tr.alert.sourceLocale': '翻譯匯入僅適用於目標語言。{locale} 是來源語言（文本是「從」這個語言翻出去的，不是翻「到」這個語言）。\n\n要怎麼測試：\n  1. 把上方「文本語言」切到目標語言（ru-RU / fr-FR / it-IT / es-ES / ja-JP）。\n  2. 再匯入對應的翻譯檔（例如 Loc_ru-RU.csv）。',
@@ -353,6 +352,7 @@
       'tr.alert.warnings': '\n\n⚠️ 警告：\n  {head}',
       'tr.alert.warningsMore': '\n  …（再 {n} 條，請看 console）',
       'tr.alert.persistFailed': '⛔ 無法將 {locale} 譯文存入瀏覽器（檔案：{file}）。\n\n畫面顯示了匯入結果，但**重新整理就會消失**。\n請清掉其他網站資料或換一個瀏覽器設定檔，再重新匯入。',
+      'tr.alert.notesRestored': '\n  📝 還原譯者筆記：{n} 條',
       'tr.alert.noBaseline': '尚未匯入任何譯文檔。請先匯入，編輯完再匯出。',
       'tr.alert.noSource': '找不到當初匯入檔案的結構（可能 localStorage 容量不夠被丟掉）。請重新匯入一次原始 .csv / .xlsx，再匯出。',
       'tr.alert.downloadFailed': '產出譯文檔失敗：{msg}',
@@ -956,9 +956,8 @@
   async function selectLocale(loc) {
     state.activeLocale = loc;
     await loadAndShowCurrent();
-    if (typeof TranslationUI !== 'undefined' && TranslationUI.notifyLocaleChange) {
-      TranslationUI.notifyLocaleChange();
-    }
+    // notifyContextChange is fired from loadAndShowCurrent itself — no
+    // redundant call here.
   }
 
   async function loadAndShowCurrent() {
@@ -992,11 +991,11 @@
       renderVars();
       syncActiveNodeInList();
     }
-    // Refresh translation stats / progress whenever the active script or
-    // locale data finishes loading — getActiveProjectUids depends on the
-    // en-US project being available.
-    if (typeof TranslationUI !== 'undefined' && TranslationUI.notifyLocaleChange) {
-      TranslationUI.notifyLocaleChange();
+    // Refresh translation stats / progress now that the active script or
+    // locale data has finished loading — getActiveProjectUids depends on
+    // the en-US project being parsed.
+    if (typeof TranslationUI !== 'undefined' && TranslationUI.notifyContextChange) {
+      TranslationUI.notifyContextChange();
     }
   }
 
@@ -1794,15 +1793,24 @@
   // Walk the active script's en-US project and return the UID set of every
   // translatable line / choice option. Used by translation-ui.js to render
   // "X / Y translated" stats and the progress bar.
+  //
+  // Cached by (activeGroup, en-US project identity). The project object is
+  // stable for the lifetime of an entry — it's only replaced when the
+  // script is reloaded. Stats updates can therefore reuse the result for
+  // every keystroke / inline edit without re-walking thousands of nodes.
+  const __projectUidCache = new WeakMap(); // project → Set<uid>
   function collectActiveProjectUids() {
-    const out = new Set();
-    if (!state.activeGroup) return out;
+    if (!state.activeGroup) return new Set();
     const groupMap = state.groups.get(state.activeGroup);
-    if (!groupMap) return out;
+    if (!groupMap) return new Set();
     const enEntry = groupMap.get('en-US');
-    if (!enEntry || !enEntry.project) return out;
-    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return out;
+    if (!enEntry || !enEntry.project) return new Set();
+    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return new Set();
 
+    const cached = __projectUidCache.get(enEntry.project);
+    if (cached) return cached;
+
+    const out = new Set();
     const visit = (statements, nodeIndex) => {
       for (const s of statements) {
         if (s.type === 'line') {
@@ -1825,6 +1833,7 @@
       if (!node || !node.statements) continue;
       visit(node.statements, node.nodeIndex);
     }
+    __projectUidCache.set(enEntry.project, out);
     return out;
   }
 
@@ -2425,7 +2434,11 @@
       return;
     }
     state.runtime = new YarnRuntime(proj);
-    state.lastVarValues = { ...state.runtime.vars };
+    // Reset the var-change-badge baseline. runtime.start() will re-prime
+    // this.vars from declarations + overrides; the first <<set>> in the
+    // node fires onVarChange, where handleVarChange compares against ∅ for
+    // any name not yet seen this session — that's the correct UX.
+    state.lastVarValues = {};
     state.runtime.onVarChange = handleVarChange;
     $('transcript').innerHTML = '';
     setActiveNode(nodeTitle);

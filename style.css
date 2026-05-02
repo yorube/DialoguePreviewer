@@ -233,22 +233,6 @@ body.dragover { outline: 2px dashed var(--accent); outline-offset: -6px; }
 .ui-lang-ctrl { margin-left: auto; }
 .ui-lang-ctrl select { min-width: 110px; }
 
-/* File input (label-as-button) — secondary pill */
-.file-ctrl {
-  cursor: pointer;
-  padding: 6px 14px;
-  background: var(--bg-2);
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-pill);
-  color: var(--fg);
-  font-size: var(--t-body);
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  transition: background 0.14s, border-color 0.14s;
-}
-.file-ctrl:hover { background: var(--bg-3); border-color: var(--accent); }
-
 /* Status pill */
 .status {
   font-size: var(--t-micro);
@@ -498,21 +482,6 @@ body.dragging-splitter * { user-select: none; }
 .node-note-btn:hover { opacity: 1 !important; background: var(--bg-3); color: var(--speaker); }
 #node-list li.has-note .node-note-btn { opacity: 1; color: var(--speaker); }
 
-/* Translation status dot — added by ui-patch.js */
-.node-status {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--line-2);
-  transition: background 0.14s, box-shadow 0.14s;
-  flex: 0 0 auto;
-}
-.node-status.is-translated  { background: var(--good); box-shadow: 0 0 0 2px var(--good-bg); }
-.node-status.is-partial     { background: var(--warn); box-shadow: 0 0 0 2px var(--warn-bg); }
-.node-status.is-untranslated{ background: var(--line-2); }
-.node-status.is-source      { background: transparent; border: 1px solid var(--line-2); }
-
 /* ============================================================================
    Source panel — tabs, code view, syntax tinting
    ============================================================================ */
@@ -690,18 +659,6 @@ body.dragging-splitter * { user-select: none; }
   font-size: var(--t-body);
 }
 .dialogue-modebar:empty { padding: 0; border: 0; }
-.t-edit-banner {
-  flex: 1 1 100%;
-  margin-top: var(--s-1);
-  padding: var(--s-2) var(--s-3);
-  background: var(--accent-faint);
-  border: 1px solid var(--accent-mid);
-  border-radius: var(--r-md);
-  color: var(--accent-hi);
-  font-size: var(--t-body);
-  line-height: 1.5;
-}
-
 .dialogue-toolbar {
   display: flex;
   align-items: center;
@@ -712,15 +669,10 @@ body.dragging-splitter * { user-select: none; }
 }
 
 /* ============================================================================
-   Button system — pill, 3 tiers
-   - .action-btn          → secondary (default toolbar buttons)
-   - .action-btn.primary  → primary CTA (filled accent)
-   - .action-btn.ghost    → tertiary (no border, hover bg only)
-   - all share 32px height, 999px radius, 14px+icon padding
+   Button system — secondary pill (the only tier we currently emit)
    ============================================================================ */
 
-.action-btn,
-.btn {
+.action-btn {
   background: transparent;
   border: 1px solid var(--line-2);
   color: var(--fg-mid);
@@ -737,65 +689,17 @@ body.dragging-splitter * { user-select: none; }
   height: 36px;
   white-space: nowrap;
 }
-.action-btn kbd, .btn kbd, .ctrl kbd {
-  display: inline-block;
-  padding: 1px 6px;
-  margin-left: 4px;
-  background: var(--bg);
-  border: 1px solid var(--line-2);
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--fg-dim);
-  line-height: 1.4;
-}
-.action-btn:hover:not(:disabled),
-.btn:hover:not(:disabled) {
+.action-btn:hover:not(:disabled) {
   background: var(--bg-3);
   color: var(--fg);
   border-color: var(--line-3);
 }
-.action-btn:active:not(:disabled),
-.btn:active:not(:disabled) { transform: translateY(0.5px); }
-.action-btn:disabled,
-.btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.action-btn:focus-visible,
-.btn:focus-visible {
+.action-btn:active:not(:disabled) { transform: translateY(0.5px); }
+.action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.action-btn:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-faint);
-}
-
-.action-btn.primary,
-.btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
-  font-weight: 600;
-}
-.action-btn.primary:hover:not(:disabled),
-.btn.primary:hover:not(:disabled) {
-  background: var(--accent-hi);
-  border-color: var(--accent-hi);
-  color: var(--accent-fg);
-}
-
-.action-btn.ghost,
-.btn.ghost {
-  border-color: transparent;
-  color: var(--fg-dim);
-}
-.action-btn.ghost:hover:not(:disabled),
-.btn.ghost:hover:not(:disabled) {
-  background: var(--bg-2);
-  border-color: transparent;
-}
-
-.action-btn.danger:hover:not(:disabled) {
-  background: var(--warn-bg);
-  border-color: var(--warn);
-  color: var(--warn);
 }
 
 /* Note button highlights when current node has a note */
@@ -1175,59 +1079,7 @@ body.dragging-splitter * { user-select: none; }
 .var-change-badge .vc-to { color: var(--good); font-weight: 600; }
 
 /* ============================================================================
-   Hint pill — bottom-right, dismissable
-   ============================================================================ */
-.hint {
-  position: fixed;
-  bottom: var(--s-4);
-  right: var(--s-4);
-  font-size: 11px;
-  color: var(--fg-mid);
-  background: var(--bg-1);
-  padding: 10px 32px 10px var(--s-3);
-  border-radius: var(--r-md);
-  border: 1px solid var(--line);
-  text-align: right;
-  font-family: var(--font-mono);
-  line-height: 1.6;
-  letter-spacing: 0.2px;
-  box-shadow: var(--shadow-2);
-  max-width: 380px;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.hint.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; }
-.hint-close {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  background: transparent;
-  border: 0;
-  color: var(--fg-faint);
-  font-size: 14px;
-  cursor: pointer;
-  border-radius: 50%;
-  padding: 0;
-  line-height: 1;
-}
-.hint-close:hover { background: var(--bg-2); color: var(--fg); }
-.hint code, .hint kbd {
-  background: var(--bg-2);
-  padding: 1px 6px;
-  border-radius: var(--r-pill);
-  font-size: 10px;
-  border: 1px solid var(--line-2);
-  font-family: inherit;
-  color: var(--fg-mid);
-}
-
-/* ============================================================================
    Translation toolbar — restyled (translation-ui.js injects t-ctrl class)
-   This is the visual hotspot for the translation flow. The Edit Mode toggle
-   and Export button get primary treatment via .ui-patch promotions.
    ============================================================================ */
 
 .topbar-globalops .ctrl.t-ctrl,
@@ -1307,37 +1159,6 @@ body.dragging-splitter * { user-select: none; }
 }
 .t-progress-label .done { color: var(--fg); font-weight: 600; }
 .t-progress[hidden] { display: none; }
-
-/* Reset confirm flow */
-.t-reset-confirm {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 4px;
-  font-size: var(--t-micro);
-  color: var(--warn);
-  font-weight: 600;
-}
-.t-reset-confirm button {
-  padding: 4px 10px;
-  border-radius: var(--r-pill);
-  font-size: var(--t-micro);
-  font-weight: 600;
-  border: 1px solid var(--line-2);
-  background: transparent;
-  color: var(--fg-mid);
-  cursor: pointer;
-  font-family: inherit;
-}
-.t-reset-confirm button.yes {
-  background: var(--warn-bg);
-  border-color: var(--warn);
-  color: var(--warn);
-}
-.t-reset-confirm button.yes:hover {
-  background: var(--warn);
-  color: var(--bg);
-}
 
 /* Reset is destructive — danger style */
 .topbar-globalops .ctrl.t-ctrl.danger {
@@ -1940,7 +1761,7 @@ body.t-compare-mode .compare-view {
   .topbar { padding: 8px 12px; gap: 6px; min-height: auto; }
   .brand { font-size: 12px; }
   .ctrl { font-size: 12px; }
-  .ctrl select, .ctrl button, .file-ctrl, .action-btn {
+  .ctrl select, .ctrl button, .action-btn {
     padding: 6px 12px;
     font-size: 12px;
     height: 30px;
@@ -1969,7 +1790,6 @@ body.t-compare-mode .compare-view {
   .action-btn { flex: 0 1 auto; padding: 6px 12px; font-size: 12px; }
   .var-row { padding: 6px; font-size: 11px; }
   .var-edit-text, .var-edit-number { width: 80px; }
-  .hint { display: none; }
 }
 
 @media (max-width: 480px) {

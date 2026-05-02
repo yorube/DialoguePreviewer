@@ -13,7 +13,9 @@
     'use strict';
 
     const STORAGE_PREFIX = 'mbu-yarn-translation-';
-    const STORAGE_VERSION = 1;
+    // v2: source rows no longer persisted (was the cause of localStorage
+    // quota failures). Bumping version invalidates v1 payloads cleanly.
+    const STORAGE_VERSION = 2;
 
     /**
      * 每個 locale 一個 State 實例。
@@ -73,11 +75,6 @@
                 if (Array.isArray(obj.baseline)) state.baseline = new Map(obj.baseline);
                 if (Array.isArray(obj.overrides)) state.overrides = new Map(obj.overrides);
                 if (obj.sourceMeta) state.sourceMeta = obj.sourceMeta;
-                // obj.source is no longer persisted (see persist()). Old
-                // payloads written before this change may still carry it;
-                // honor those so users don't lose their cached source on
-                // first load after the upgrade.
-                if (obj.source) state.source = obj.source;
             } catch (e) {
                 console.warn('[TranslationState] load failed:', e);
             }
