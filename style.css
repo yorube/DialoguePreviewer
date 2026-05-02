@@ -778,9 +778,31 @@ body.dragging-splitter * { user-select: none; }
   background: color-mix(in oklab, var(--accent) 3%, transparent);
 }
 .transcript-empty-icon {
-  font-size: 32px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
   color: var(--accent);
-  line-height: 1;
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0 0 0 4px; /* nudge the ▶ glyph optical-center right */
+  transition: background 0.14s, border-color 0.14s, color 0.14s, transform 0.06s, box-shadow 0.14s;
+}
+.transcript-empty-icon:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: var(--shadow-glow);
+}
+.transcript-empty-icon:active { transform: translateY(0.5px); }
+.transcript-empty-icon:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-faint), 0 0 18px var(--accent-mid);
 }
 .transcript-empty-text {
   font-size: var(--t-body);

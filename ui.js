@@ -2540,8 +2540,10 @@
     const ph = document.createElement('div');
     ph.className = 'transcript-empty';
     ph.innerHTML =
-      `<div class="transcript-empty-icon">▶</div>` +
+      `<button type="button" class="transcript-empty-icon"
+         data-i18n-title="btn.play.tip" aria-label="Play">▶</button>` +
       `<div class="transcript-empty-text" data-i18n="transcript.pressPlay"></div>`;
+    ph.querySelector('.transcript-empty-icon').addEventListener('click', playFromCurrentNode);
     tEl.appendChild(ph);
     applyI18n();
   }
