@@ -42,7 +42,13 @@
     if (!file) throw new Error('file is required');
     const lowerName = file.name.toLowerCase();
     if (lowerName.endsWith('.csv')) {
-      const text = await file.text();
+      // file.text() default-decodes UTF-8 with the BOM-stripping algorithm
+      // (per WHATWG encoding spec), which would silently swallow the BOM
+      // and leave parseCsv unable to remember it for round-trip export.
+      // Manual decode with ignoreBOM:true preserves U+FEFF as a literal
+      // first char so parseCsv can detect + strip + record it.
+      const buf = await file.arrayBuffer();
+      const text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(buf);
       return parseCsv(text, expectedLocale, { fileName: file.name });
     }
     if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {

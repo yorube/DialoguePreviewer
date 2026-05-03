@@ -183,8 +183,9 @@
     assertEq(r.statements[0].items[1].text, 'No');
   });
 
-  test('parseNodeBody <<set>> → set statement', () => {
-    const r = YarnParser.parseNodeBody('<<set $x = 1>>');
+  test('parseNodeBody <<Set($x, 1)>> → set statement', () => {
+    // MBU dialect uses <<Set($var, val)>>, not Yarn-official <<set $var = val>>.
+    const r = YarnParser.parseNodeBody('<<Set($x, 1)>>');
     assertEq(r.statements[0].type, 'set');
     assertEq(r.statements[0].variable, '$x');
   });
@@ -285,8 +286,8 @@
     assertEq(rt.ended, true);
   });
 
-  test('onVarChange fires on <<set>>', () => {
-    const rt = makeRuntime('<<set $x = 5>>\nMira: ok');
+  test('onVarChange fires on <<Set>>', () => {
+    const rt = makeRuntime('<<Set($x, 5)>>\nMira: ok');
     let captured = null;
     rt.onVarChange = (name, val) => { captured = [name, val]; };
     rt.start('Start');
@@ -305,7 +306,7 @@
   });
 
   test('snapshot preserves vars', () => {
-    const rt = makeRuntime('<<set $x = 1>>\nMira: a\n<<set $x = 2>>\nMira: b');
+    const rt = makeRuntime('<<Set($x, 1)>>\nMira: a\n<<Set($x, 2)>>\nMira: b');
     rt.start('Start');
     const snap = rt.snapshot();           // $x = 1, on line "a"
     rt.advance();                          // sets $x = 2, on line "b"
@@ -325,13 +326,13 @@
   });
 
   test('if true cond enters then body', () => {
-    const rt = makeRuntime('<<set $x = 1>>\n<<#If($x = 1)>>\nMira: yes\n<<#EndIf>>');
+    const rt = makeRuntime('<<Set($x, 1)>>\n<<#If($x = 1)>>\nMira: yes\n<<#EndIf>>');
     rt.start('Start');
     assertEq(rt.current.text, 'yes');
   });
 
   test('if false cond skips then body', () => {
-    const rt = makeRuntime('<<set $x = 0>>\n<<#If($x = 1)>>\nMira: skipped\n<<#EndIf>>\nMira: after');
+    const rt = makeRuntime('<<Set($x, 0)>>\n<<#If($x = 1)>>\nMira: skipped\n<<#EndIf>>\nMira: after');
     rt.start('Start');
     assertEq(rt.current.text, 'after');
   });
