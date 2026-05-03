@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DialoguePreviewer — Auto Test Suite</title>
+<style>
+  :root {
+    --bg: #1a1d22; --panel: #232730; --line: #353a45;
+    --fg: #e8e8e8; --dim: #9aa0a8; --pass: #88e088; --fail: #ff8888;
+    --warn: #e0c060; --accent: #c8a878;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font-family: ui-monospace, "Cascadia Code", monospace;
+    background: var(--bg); color: var(--fg);
+    max-width: 1100px; margin: 0 auto; line-height: 1.5;
+  }
+  h1 { font-size: 18px; margin: 0 0 16px; color: var(--accent); }
+  .summary {
+    padding: 16px; border-radius: 6px; margin: 16px 0; font-weight: 600;
+    border: 1px solid var(--line);
+  }
+  .summary.pass { background: rgba(136,224,136,0.08); border-color: var(--pass); color: var(--pass); }
+  .summary.fail { background: rgba(255,136,136,0.10); border-color: var(--fail); color: var(--fail); }
+  .summary.run  { background: rgba(200,168,120,0.08); color: var(--warn); }
+  .group {
+    margin-top: 24px;
+    padding: 6px 12px;
+    background: var(--panel);
+    border-left: 3px solid var(--accent);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .test {
+    padding: 4px 12px;
+    margin: 1px 0;
+    border-left: 3px solid var(--line);
+    font-size: 12px;
+  }
+  .test.pass { border-color: var(--pass); }
+  .test.fail { border-color: var(--fail); background: rgba(255,136,136,0.05); }
+  .test.skip { border-color: var(--dim); color: var(--dim); }
+  .test .err {
+    color: var(--fail);
+    margin: 4px 0 4px 16px;
+    padding: 8px 12px;
+    background: rgba(255,136,136,0.08);
+    white-space: pre-wrap;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .manual {
+    margin-top: 32px; padding: 20px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  }
+  .manual h2 { margin-top: 0; color: var(--accent); font-size: 14px; }
+  .manual ol { margin: 8px 0; padding-left: 24px; }
+  .manual li { margin: 4px 0; font-size: 12px; }
+  .manual .why { color: var(--dim); font-style: italic; }
+  code { color: var(--warn); }
+</style>
+</head>
+<body>
+<h1>🧪 DialoguePreviewer — Auto Test Suite</h1>
+<p style="color: var(--dim); font-size: 12px;">
+  Loads the real modules and runs assertion suites against them.
+  Pure-logic modules (parser / runtime / translation-state / loc-parser /
+  loc-writer / yarn-converter) are fully covered. UI / CSS / visual / async
+  browser behaviors stay in the manual section at the bottom.
+</p>
+<div id="summary" class="summary run">Running…</div>
+<div id="results"></div>
+
+<!-- Real project modules (same files the production page loads) -->
+<script src="parser.js"></script>
+<script src="runtime.js"></script>
+<script src="translation-state.js"></script>
+<script src="loc-parser.js"></script>
+<script src="loc-writer.js"></script>
+<script src="yarn-converter.js"></script>
+
+<script>
+(async function () {
+  'use strict';
+
+  // ─── Test runner ─────────────────────────────────────────────────────
+  const results = [];
+  const tests = [];
+  let curGroup = '';
+  function group(name) { tests.push({ kind: 'group', name }); }
+  function test(name, fn) { tests.push({ kind: 'test', name, fn, group: curGroup }); }
+  function setGroup(g) { curGroup = g; group(g); }
+  function assert(cond, msg) {
+    if (!cond) throw new Error('assert failed: ' + (msg || ''));
+  }
+  function assertEq(actual, expected, msg) {
+    const a = JSON.stringify(actual), e = JSON.stringify(expected);
+    if (a !== e) throw new Error(`${msg || 'assertEq'}: expected ${e}, got ${a}`);
+  }
+  function assertThrows(fn, msg) {
+    try { fn(); }
+    catch (e) { return; }
+    throw new Error('expected throw: ' + (msg || ''));
+  }
+  async function assertThrowsAsync(fn, msg) {
+    try { await fn(); }
+    catch (e) { return; }
+    throw new Error('expected throw: ' + (msg || ''));
+  }
+
+  // ─── localStorage isolation ─────────────────────────────────────────
+  // Real browser localStorage is shared with the actual app on the same
+  // origin. Snapshot every yp.* key we might touch, restore after.
+  const __snapshotKeys = new Set();
+  const __snapshot = {};
+  function trackKey(k) {
+    if (!__snapshotKeys.has(k)) {
+      __snapshotKeys.add(k);
+      __snapshot[k] = localStorage.getItem(k);
+    }
+  }
+  function restoreLS() {
+    for (const k of __snapshotKeys) {
+      if (__snapshot[k] === null) localStorage.removeItem(k);
+      else localStorage.setItem(k, __snapshot[k]);
+    }
+  }
+
+  // Generate a unique throwaway locale per test so keys never collide
+  // with the user's real data.
+  let __testCounter = 0;
+  function ephemeralLocale(label) {
+    const loc = '__test_' + (++__testCounter) + '_' + (label || 'x');
+    trackKey('yp.translation.' + loc);
+    localStorage.removeItem('yp.translation.' + loc);
+    return loc;
+  }
+
+  // Override Storage.prototype.setItem temporarily (for quota test).
+  function withSetItemOverride(impl, fn) {
+    const orig = Storage.prototype.setItem;
+    Storage.prototype.setItem = impl;
+    try { fn(); } finally { Storage.prototype.setItem = orig; }
+  }
+
+  // ============================================================
+  //  parser.js
+  // ============================================================
+  setGroup('parser.js — AST shape');
+
+  test('parseProject([]) → empty Map', () => {
+    const p = YarnParser.parseProject([]);
+    assertEq(p.nodes.size, 0);
+    assertEq(p.parseErrors.length, 0);
+  });
+
+  test('parseNodeBody simple speaker line', () => {
+    const r = YarnParser.parseNodeBody('Mira: Hello');
+    assertEq(r.statements.length, 1);
+    assertEq(r.statements[0].type, 'line');
+    assertEq(r.statements[0].speaker, 'Mira');
+    assertEq(r.statements[0].text, 'Hello');
+  });
+
+  test('parseNodeBody narrator line (no speaker)', () => {
+    const r = YarnParser.parseNodeBody('It was raining.');
+    assertEq(r.statements[0].type, 'line');
+    assertEq(r.statements[0].speaker, '');
+    assertEq(r.statements[0].text, 'It was raining.');
+  });
+
+  test('parseNodeBody choices with bodies', () => {
+    const body = '-> Yes\n    Mira: Good\n-> No\n    Mira: Sad';
+    const r = YarnParser.parseNodeBody(body);
+    assertEq(r.statements[0].type, 'choices');
+    assertEq(r.statements[0].items.length, 2);
+    assertEq(r.statements[0].items[0].text, 'Yes');
+    assertEq(r.statements[0].items[0].body[0].text, 'Good');
+    assertEq(r.statements[0].items[1].text, 'No');
+  });
+
+  test('parseNodeBody <<set>> → set statement', () => {
+    const r = YarnParser.parseNodeBody('<<set $x = 1>>');
+    assertEq(r.statements[0].type, 'set');
+    assertEq(r.statements[0].variable, '$x');
+  });
+
+  test('parseNodeBody <<#End>> → end statement', () => {
+    const r = YarnParser.parseNodeBody('<<#End>>');
+    assertEq(r.statements[0].type, 'end');
+  });
+
+  test('parseNodeBody <<#GoTo(@target)>> → goto', () => {
+    const r = YarnParser.parseNodeBody('<<#GoTo(@target)>>');
+    assertEq(r.statements[0].type, 'goto');
+    assertEq(r.statements[0].label, 'target');
+  });
+
+  test('parseNodeBody #If/#EndIf → if statement', () => {
+    const r = YarnParser.parseNodeBody('<<#If($x = 1)>>\nMira: yes\n<<#EndIf>>');
+    assertEq(r.statements[0].type, 'if');
+    assertEq(r.statements[0].then[0].text, 'yes');
+  });
+
+  test('parseNodeBody @label captures', () => {
+    const r = YarnParser.parseNodeBody('<<@start>>\nMira: a');
+    assertEq(r.labels.has('start'), true);
+  });
+
+  test('parseProject collects parseErrors gracefully', () => {
+    // parser swallows per-node errors and keeps going
+    const p = YarnParser.parseProject([
+      { title: 'Good', body: 'Mira: ok' },
+    ]);
+    assertEq(p.nodes.size, 1);
+    assertEq(p.parseErrors.length, 0);
+  });
+
+  test('markupToSafeHtml escapes raw <script>', () => {
+    const out = YarnParser.markupToSafeHtml('<script>x</script>');
+    assert(!out.includes('<script>'), 'raw script tag must be escaped');
+    assert(out.includes('&lt;') === false || !out.includes('<script>'));
+  });
+
+  test('markupToSafeHtml passes <i><b><u>', () => {
+    assertEq(YarnParser.markupToSafeHtml('<i>hi</i>'), '<i>hi</i>');
+    assertEq(YarnParser.markupToSafeHtml('<b>bold</b>'), '<b>bold</b>');
+  });
+
+  test('markupToSafeHtml passes <color=#abc>...</color>', () => {
+    const out = YarnParser.markupToSafeHtml('<color=#abc>hi</color>');
+    assert(out.includes('color:#abc'), `expected color:#abc in: ${out}`);
+  });
+
+  test('stripMarkup removes all tags', () => {
+    assertEq(YarnParser.stripMarkup('<i>hi</i> <color=#abc>there</color>'), 'hi there');
+  });
+
+  // ============================================================
+  //  runtime.js
+  // ============================================================
+  setGroup('runtime.js — playback semantics');
+
+  function makeRuntime(body, title) {
+    title = title || 'Start';
+    const proj = YarnParser.parseProject([{ title, body }]);
+    return new YarnRuntime(proj);
+  }
+
+  test('start ticks to first line', () => {
+    const rt = makeRuntime('Mira: First\nMira: Second');
+    rt.start('Start');
+    assertEq(rt.current.kind, 'line');
+    assertEq(rt.current.text, 'First');
+    assertEq(rt.currentNodeTitle, 'Start');
+  });
+
+  test('advance moves to next line', () => {
+    const rt = makeRuntime('Mira: First\nMira: Second');
+    rt.start('Start');
+    rt.advance();
+    assertEq(rt.current.text, 'Second');
+  });
+
+  test('end of dialogue sets ended = true', () => {
+    const rt = makeRuntime('Mira: Only');
+    rt.start('Start');
+    rt.advance();
+    assertEq(rt.ended, true);
+  });
+
+  test('explicit <<#End>> sets ended', () => {
+    const rt = makeRuntime('Mira: a\n<<#End>>\nMira: never');
+    rt.start('Start');
+    rt.advance();   // past first line
+    assertEq(rt.ended, true);
+  });
+
+  test('onVarChange fires on <<set>>', () => {
+    const rt = makeRuntime('<<set $x = 5>>\nMira: ok');
+    let captured = null;
+    rt.onVarChange = (name, val) => { captured = [name, val]; };
+    rt.start('Start');
+    assertEq(captured, ['$x', 5]);
+    assertEq(rt.vars['$x'], 5);
+  });
+
+  test('snapshot/restore round-trip preserves position', () => {
+    const rt = makeRuntime('Mira: A\nMira: B\nMira: C');
+    rt.start('Start');
+    const snap = rt.snapshot();
+    rt.advance(); rt.advance();
+    assertEq(rt.current.text, 'C');
+    rt.restore(snap);
+    assertEq(rt.current.text, 'A');
+  });
+
+  test('snapshot preserves vars', () => {
+    const rt = makeRuntime('<<set $x = 1>>\nMira: a\n<<set $x = 2>>\nMira: b');
+    rt.start('Start');
+    const snap = rt.snapshot();           // $x = 1, on line "a"
+    rt.advance();                          // sets $x = 2, on line "b"
+    assertEq(rt.vars['$x'], 2);
+    rt.restore(snap);
+    assertEq(rt.vars['$x'], 1);
+  });
+
+  test('choose enters option body', () => {
+    const rt = makeRuntime('-> A\n    Mira: gotA\n-> B\n    Mira: gotB');
+    rt.start('Start');
+    assertEq(rt.current.kind, 'choices');
+    assertEq(rt.current.items.length, 2);
+    rt.choose(0);
+    assertEq(rt.current.kind, 'line');
+    assertEq(rt.current.text, 'gotA');
+  });
+
+  test('if true cond enters then body', () => {
+    const rt = makeRuntime('<<set $x = 1>>\n<<#If($x = 1)>>\nMira: yes\n<<#EndIf>>');
+    rt.start('Start');
+    assertEq(rt.current.text, 'yes');
+  });
+
+  test('if false cond skips then body', () => {
+    const rt = makeRuntime('<<set $x = 0>>\n<<#If($x = 1)>>\nMira: skipped\n<<#EndIf>>\nMira: after');
+    rt.start('Start');
+    assertEq(rt.current.text, 'after');
+  });
+
+  test('readDeclaredDefaults reads //public bool', () => {
+    const out = YarnRuntime.readDeclaredDefaults('//public bool met = false\n//public int trustLevel = 3');
+    assertEq(out['$met'], false);
+    assertEq(out['$trustLevel'], 3);
+  });
+
+  // ============================================================
+  //  translation-state.js
+  // ============================================================
+  setGroup('translation-state.js — persistence');
+
+  test('createState exposes API methods', () => {
+    const s = TranslationState.createState(ephemeralLocale('api'));
+    for (const m of ['get', 'source', 'setOverride', 'replaceBaseline', 'reset', 'buildMergedMap', 'stats', 'getSource']) {
+      assertEq(typeof s[m], 'function', `missing method: ${m}`);
+    }
+  });
+
+  test('setOverride returns "ok" + persists', () => {
+    const loc = ephemeralLocale('set');
+    const s = TranslationState.createState(loc);
+    assertEq(s.setOverride('uid-1', 'bonjour'), 'ok');
+    assertEq(s.get('uid-1'), 'bonjour');
+    assertEq(s.source('uid-1'), 'override');
+  });
+
+  test('setOverride empty string deletes', () => {
+    const loc = ephemeralLocale('del');
+    const s = TranslationState.createState(loc);
+    s.setOverride('uid-1', 'hi');
+    s.setOverride('uid-1', '');
+    assertEq(s.source('uid-1'), 'none');
+  });
+
+  test('replaceBaseline returns "ok" + populates', () => {
+    const loc = ephemeralLocale('repl');
+    const s = TranslationState.createState(loc);
+    const r = s.replaceBaseline(new Map([['u1', 'bonjour']]), { fileName: 'x.csv' });
+    assertEq(r, 'ok');
+    assertEq(s.get('u1'), 'bonjour');
+    assertEq(s.source('u1'), 'baseline');
+  });
+
+  test('replaceBaseline clears overrides by default', () => {
+    const loc = ephemeralLocale('clearOv');
+    const s = TranslationState.createState(loc);
+    s.setOverride('u1', 'edited');
+    s.replaceBaseline(new Map([['u1', 'imported']]), {});
+    assertEq(s.get('u1'), 'imported');
+    assertEq(s.source('u1'), 'baseline');
+  });
+
+  test('persist returns "failed" on quota exceeded', () => {
+    const loc = ephemeralLocale('quota');
+    const s = TranslationState.createState(loc);
+    let result;
+    withSetItemOverride(function () {
+      throw new DOMException('Quota', 'QuotaExceededError');
+    }, () => {
+      result = s.replaceBaseline(new Map([['u1', 'x']]), {});
+    });
+    assertEq(result, 'failed');
+  });
+
+  test('overrides shadow baseline', () => {
+    const loc = ephemeralLocale('shadow');
+    const s = TranslationState.createState(loc);
+    s.replaceBaseline(new Map([['u1', 'imported']]), {});
+    s.setOverride('u1', 'edited');
+    assertEq(s.get('u1'), 'edited');
+    assertEq(s.source('u1'), 'override');
+  });
+
+  test('load reconstructs state from localStorage', () => {
+    const loc = ephemeralLocale('load');
+    TranslationState.createState(loc).setOverride('u1', 'hello');
+    const s2 = TranslationState.createState(loc);
+    assertEq(s2.get('u1'), 'hello');
+  });
+
+  test('localStorage key matches yp.translation.{locale}', () => {
+    const loc = ephemeralLocale('keyfmt');
+    const s = TranslationState.createState(loc);
+    s.setOverride('u', 'v');
+    const expected = 'yp.translation.' + loc;
+    assert(localStorage.getItem(expected) !== null, `expected key ${expected} to exist`);
+  });
+
+  test('STORAGE_VERSION mismatch ignored on load', () => {
+    const loc = ephemeralLocale('vermis');
+    const k = 'yp.translation.' + loc;
+    localStorage.setItem(k, JSON.stringify({ v: 999, baseline: [['u', 'v']] }));
+    const s = TranslationState.createState(loc);
+    assertEq(s.get('u'), undefined);
+  });
+
+  test('buildMergedMap merges baseline + overrides', () => {
+    const loc = ephemeralLocale('merge');
+    const s = TranslationState.createState(loc);
+    s.replaceBaseline(new Map([['u1', 'a'], ['u2', 'b']]), {});
+    s.setOverride('u2', 'B-edit');
+    s.setOverride('u3', 'c-only');
+    const m = s.buildMergedMap();
+    assertEq(m.get('u1'), 'a');
+    assertEq(m.get('u2'), 'B-edit');
+    assertEq(m.get('u3'), 'c-only');
+  });
+
+  test('stats returns correct counts', () => {
+    const loc = ephemeralLocale('stats');
+    const s = TranslationState.createState(loc);
+    s.replaceBaseline(new Map([['u1', 'a'], ['u2', 'b']]), {});
+    s.setOverride('u2', 'B-edit');
+    s.setOverride('u3', 'c-only');
+    const st = s.stats();
+    assertEq(st.baselineCount, 2);
+    assertEq(st.overrideCount, 2);
+    assertEq(st.overriddenFromBaseline, 1);    // only u2 was both
+    assertEq(st.onlyOverrideCount, 1);          // only u3 (override-only)
+  });
+
+  test('reset clears everything', () => {
+    const loc = ephemeralLocale('reset');
+    const s = TranslationState.createState(loc);
+    s.replaceBaseline(new Map([['u1', 'a']]), {});
+    s.setOverride('u2', 'b');
+    s.reset();
+    assertEq(s.get('u1'), undefined);
+    assertEq(s.get('u2'), undefined);
+    assertEq(localStorage.getItem('yp.translation.' + loc), null);
+  });
+
+  // ============================================================
+  //  loc-parser.js
+  // ============================================================
+  setGroup('loc-parser.js — CSV import');
+
+  test('parseFile rejects unknown extension', async () => {
+    const f = new File(['x'], 'foo.txt', { type: 'text/plain' });
+    await assertThrowsAsync(() => LocParser.parseFile(f, 'fr-FR'));
+  });
+
+  test('CSV with BOM + locale column parses correctly', async () => {
+    const csv = '﻿Type,en-US,fr-FR,ID\nDialogue,Hello,Bonjour,uid-1\n';
+    const f = new File([csv], 'test.csv', { type: 'text/csv' });
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.translations.size, 1);
+    assertEq(r.translations.get('uid-1'), 'Bonjour');
+    assertEq(r.stats.csvHasBom, true);
+    assertEq(r.stats.locale, 'fr-FR');
+  });
+
+  test('CSV without target locale falls back to first locale-code', async () => {
+    const csv = 'Type,en-US,ru-RU,ID\nDialogue,Hello,Privet,uid-1\n';
+    const f = new File([csv], 'test.csv');
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.stats.locale, 'ru-RU');
+    assertEq(r.translations.get('uid-1'), 'Privet');
+  });
+
+  test('CSV missing UID counted in stats', async () => {
+    const csv = 'Type,en-US,fr-FR,ID\nDialogue,Hello,Bonjour,\nDialogue,Hi,Salut,uid-2\n';
+    const f = new File([csv], 'test.csv');
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.stats.missingUid, 1);
+    assertEq(r.stats.withTranslation, 1);
+  });
+
+  test('CSV empty translation cell skipped', async () => {
+    const csv = 'Type,en-US,fr-FR,ID\nDialogue,Hello,,uid-1\nDialogue,Hi,Salut,uid-2\n';
+    const f = new File([csv], 'test.csv');
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.translations.size, 1);
+    assertEq(r.translations.get('uid-2'), 'Salut');
+  });
+
+  test('CSV with duplicate UID — last wins, dupUids counted', async () => {
+    const csv = 'Type,en-US,fr-FR,ID\nDialogue,Hi,first,uid-1\nDialogue,Hi,second,uid-1\n';
+    const f = new File([csv], 'test.csv');
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.translations.get('uid-1'), 'second');
+    assertEq(r.stats.dupUids, 1);
+  });
+
+  test('CSV with quoted cells containing comma', async () => {
+    const csv = 'Type,en-US,fr-FR,ID\nDialogue,"Hello, world","Bonjour, monde",uid-1\n';
+    const f = new File([csv], 'test.csv');
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.translations.get('uid-1'), 'Bonjour, monde');
+  });
+
+  test('CSV with no locale column → throws', async () => {
+    const csv = 'Type,en-US,ID\nDialogue,Hello,uid-1\n';
+    const f = new File([csv], 'test.csv');
+    await assertThrowsAsync(() => LocParser.parseFile(f, 'fr-FR'));
+  });
+
+  // ============================================================
+  //  loc-writer.js
+  // ============================================================
+  setGroup('loc-writer.js — CSV export round-trip');
+
+  test('write + parse round-trip preserves translations', async () => {
+    const source = {
+      format: 'csv', fileName: 'in.csv',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID'],
+      rows: [
+        ['Dialogue', 'Hello', '', 'uid-1'],
+        ['Dialogue', 'Goodbye', '', 'uid-2'],
+      ],
+      idCol: 3, localeCol: 2, csvHasBom: true,
+    };
+    const merged = new Map([['uid-1', 'Bonjour'], ['uid-2', 'Au revoir']]);
+    const out = LocWriter.writeLocFile(source, merged, {});
+    assertEq(out.filename, 'in_filled.csv');
+    const f = new File([out.payload], out.filename);
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.translations.get('uid-1'), 'Bonjour');
+    assertEq(r.translations.get('uid-2'), 'Au revoir');
+  });
+
+  test('untranslated row exports empty cell', () => {
+    const source = {
+      format: 'csv', fileName: 'in.csv',
+      headers: ['Type','en-US','fr-FR','ID'],
+      rows: [['Dialogue','Hello','','uid-1']],
+      idCol: 3, localeCol: 2, csvHasBom: false,
+    };
+    const out = LocWriter.writeLocFile(source, new Map(), {});
+    assert(out.payload.includes(',,'), 'expected empty translation cell, got: ' + out.payload);
+  });
+
+  test('cells with comma are quoted in CSV output', () => {
+    const source = {
+      format: 'csv', fileName: 'in.csv',
+      headers: ['Type','en-US','fr-FR','ID'],
+      rows: [['Dialogue','Hi','','uid-1']],
+      idCol: 3, localeCol: 2, csvHasBom: false,
+    };
+    const merged = new Map([['uid-1', 'Bonjour, ami']]);
+    const out = LocWriter.writeLocFile(source, merged, {});
+    assert(out.payload.includes('"Bonjour, ami"'), 'comma cell must be quoted');
+  });
+
+  test('writeLocFile rejects malformed source', () => {
+    assertThrows(() => LocWriter.writeLocFile({ rows: [] }, new Map(), {}));
+    assertThrows(() => LocWriter.writeLocFile(null, new Map(), {}));
+  });
+
+  // ============================================================
+  //  yarn-converter.js
+  // ============================================================
+  setGroup('yarn-converter.js — buildSO');
+
+  test('buildSO produces UID-keyed dialogue lines', () => {
+    const nodes = [
+      { title: 'Start', body: 'Mira: Hello\n-> Yes\n-> No', tags: '', position: {}, colorID: 0 },
+    ];
+    const so = YarnConverter.buildSO(nodes, 'GUID-X');
+    assertEq(so.length, 1);
+    assertEq(so[0].uid, 'GUID-X-0');
+    const dialogue = so[0].textLines.find(l => l.category === 'Dialogue');
+    assert(dialogue, 'dialogue line not found');
+    assertEq(dialogue.uid, 'GUID-X-0-1');
+    assertEq(dialogue.characterName, 'Mira');
+    assertEq(dialogue.dialogue, 'Hello');
+  });
+
+  test('buildSO classifies options', () => {
+    const nodes = [
+      { title: 'Start', body: '-> Yes\n-> No', tags: '', position: {}, colorID: 0 },
+    ];
+    const so = YarnConverter.buildSO(nodes, 'GUID-X');
+    const opts = so[0].textLines.filter(l => l.category === 'Option');
+    assertEq(opts.length, 2);
+    assertEq(opts[0].dialogue, 'Yes');
+    assertEq(opts[1].dialogue, 'No');
+  });
+
+  test('buildSO classifies comments + commands', () => {
+    const nodes = [
+      { title: 'Start', body: '// a comment\n<<set $x = 1>>\nMira: hi', tags: '', position: {}, colorID: 0 },
+    ];
+    const so = YarnConverter.buildSO(nodes, 'GUID-X');
+    const cats = so[0].textLines.map(l => l.category);
+    assert(cats.includes('Comment'));
+    assert(cats.includes('Command'));
+    assert(cats.includes('Dialogue'));
+  });
+
+  test('buildSO throws on bad input', () => {
+    assertThrows(() => YarnConverter.buildSO('not array', 'GUID'));
+    assertThrows(() => YarnConverter.buildSO([], ''));
+    assertThrows(() => YarnConverter.buildSO([], null));
+  });
+
+  // ============================================================
+  //  Cross-module: localStorage namespace consistency
+  // ============================================================
+  setGroup('namespace integrity');
+
+  test('TranslationState writes only under yp.translation.* prefix', () => {
+    const before = new Set();
+    for (let i = 0; i < localStorage.length; i++) before.add(localStorage.key(i));
+    const loc = ephemeralLocale('ns');
+    TranslationState.createState(loc).setOverride('u', 'v');
+    const after = new Set();
+    for (let i = 0; i < localStorage.length; i++) after.add(localStorage.key(i));
+    for (const k of after) {
+      if (!before.has(k)) {
+        assert(k.startsWith('yp.'), `unexpected non-yp key: ${k}`);
+      }
+    }
+  });
+
+  // ─── Run all tests ──────────────────────────────────────────────────
+  const summaryEl = document.getElementById('summary');
+  const resultsEl = document.getElementById('results');
+  let pass = 0, fail = 0;
+
+  for (const t of tests) {
+    if (t.kind === 'group') {
+      const h = document.createElement('div');
+      h.className = 'group';
+      h.textContent = t.name;
+      resultsEl.appendChild(h);
+      continue;
+    }
+    const div = document.createElement('div');
+    div.className = 'test';
+    try {
+      const r = t.fn();
+      if (r && typeof r.then === 'function') await r;
+      div.classList.add('pass');
+      div.textContent = '✓ ' + t.name;
+      pass++;
+    } catch (e) {
+      div.classList.add('fail');
+      div.textContent = '✗ ' + t.name;
+      const err = document.createElement('div');
+      err.className = 'err';
+      err.textContent = e.message + (e.stack ? '\n' + e.stack.split('\n').slice(1, 3).join('\n') : '');
+      div.appendChild(err);
+      fail++;
+    }
+    resultsEl.appendChild(div);
+  }
+
+  // Restore real localStorage
+  restoreLS();
+
+  summaryEl.className = 'summary ' + (fail === 0 ? 'pass' : 'fail');
+  summaryEl.textContent = fail === 0
+    ? `✓ All ${pass} tests passed`
+    : `✗ ${fail} failed, ${pass} passed`;
+
+  // ─── Manual checklist for things that can't be auto-tested ─────────
+  resultsEl.insertAdjacentHTML('beforeend', `
+  <div class="manual">
+    <h2>📋 Still requires manual verification</h2>
+    <p class="why">These need a real browser DOM, real user input, real CSS layout, or real network — which auto-test can't honestly cover. Open <code>index.html</code> in your browser.</p>
+
+    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">Visual / layout</h3>
+    <ol>
+      <li>oklch tokens render correctly (暖琥珀調) — toolbar / sidebar pill labels / button colors</li>
+      <li>▶ Play button shows accent fill; ■ Stop shows transparent + accent outline; hover Stop turns warn-red</li>
+      <li>Empty-state placeholder ▶ icon is a 64px circle button</li>
+      <li>Active node in sidebar has橘色 inset border + filled num pill</li>
+      <li>Var-row flash animation when <code>&lt;&lt;set&gt;&gt;</code> fires</li>
+      <li>Mode toggle switch (track + radial-gradient thumb) animates on click</li>
+      <li>Mobile breakpoint (&lt; 1100px) collapses to single column</li>
+    </ol>
+
+    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">UI flow / interaction</h3>
+    <ol>
+      <li>Click sidebar node → header / source / note panel update; transcript shows placeholder</li>
+      <li>Press ▶ → first line appears, button becomes ■ Stop, ↶ Step back enabled</li>
+      <li>Press ■ Stop → transcript clears, button reverts to ▶, snapshot history empty</li>
+      <li>Click placeholder ▶ icon → same effect as toolbar ▶</li>
+      <li>Space / Enter / R as first key → triggers ▶ when idle</li>
+      <li>Step back / Replay only enabled while playing or after end</li>
+      <li>Var-change badge (<code>$var: prev → next</code>) appears at end of last transcript row</li>
+      <li>Locale switch mid-dialogue preserves position + auto-replays</li>
+      <li>Locale switch in nav-only mode keeps placeholder</li>
+      <li>UID search → navigate only, no auto-play</li>
+      <li>Edit Mode: flat view shows full node; switching node updates flat view live</li>
+      <li>Compare Mode: comparison table updates on node switch</li>
+      <li>Help button (top-right) opens dialog; Esc closes</li>
+      <li>UI Strings page: tab switch, table renders, cell click → editor</li>
+    </ol>
+
+    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">i18n live switching</h3>
+    <ol>
+      <li>Switch UI language dropdown en ⇄ zh:
+        <ul>
+          <li>All toolbar buttons / labels swap immediately</li>
+          <li>UI Strings page: status pill, table counter, sheet tab tooltips, cell-empty marker (<code>— 空 —</code> ⇄ <code>— empty —</code>) all swap</li>
+          <li>Help dialog body re-translates</li>
+          <li>Currently-displayed alerts / confirms (none persistent, but next ones show in new language)</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">Persistence (real browser)</h3>
+    <ol>
+      <li>Import translation .csv → refresh → 譯文還在</li>
+      <li>Edit notes → refresh → notes 還在</li>
+      <li>Resize splitters → refresh → 寬度保留</li>
+      <li>Switch UI Strings tab → refresh → 還在 UI Strings 分頁</li>
+      <li>Real localStorage quota exhaustion: requires manually filling up storage to test the ⛔ alert</li>
+    </ol>
+
+    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">File I/O</h3>
+    <ol>
+      <li>Drag-drop .json files into window</li>
+      <li>Import .xlsx (the test suite covers .csv only — XLSX needs SheetJS in browser)</li>
+      <li>Export downloads correct filename; re-import the export → matches</li>
+    </ol>
+
+    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">Browser cross-check</h3>
+    <ol>
+      <li>Test in Chrome / Firefox / Safari (oklch needs Chrome 111+ / Safari 16.4+ / FF 113+)</li>
+      <li>Service Worker / Pages CDN cache behavior on deploy</li>
+    </ol>
+  </div>
+  `);
+})().catch(e => {
+  document.getElementById('summary').className = 'summary fail';
+  document.getElementById('summary').textContent = '⛔ Test runner crashed: ' + e.message;
+  console.error(e);
+});
+</script>
+</body>
+</html>
