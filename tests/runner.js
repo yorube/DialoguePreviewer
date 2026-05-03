@@ -348,42 +348,66 @@ async function runIntegrationSuite(page) {
     // intermediate value (e.g. accent at alpha 0.97 mid-transition to
     // transparent). waitForFunction polls until the FINAL value lands.
 
+    // Helper: snapshot button state for diagnostic error messages.
+    // Distinguishing "wait timed out for class" vs "wait timed out for bg"
+    // matters when the failure mode isn't obvious.
+    const btnState = () => page.evaluate(() => {
+      const el = document.querySelector('#play-btn');
+      if (!el) return 'NO #play-btn';
+      return JSON.stringify({
+        cls: Array.from(el.classList),
+        text: el.textContent.trim(),
+        bg: getComputedStyle(el).backgroundColor,
+        disabled: el.disabled,
+      });
+    });
+    // Playwright signature: waitForFunction(fn, arg, options). Passing
+    // { timeout } as the 2nd arg is treated as `arg` (passed to fn) — the
+    // options slot is empty so the default 30s timeout is used. Always
+    // pass `null` for arg.
+    const waitFor = (fn, ms, label) => page.waitForFunction(fn, null, { timeout: ms })
+      .catch(async (e) => {
+        const state = await btnState();
+        throw new Error(`${label || 'wait'} timed out (${ms}ms). #play-btn state: ${state}`);
+      });
+
     await run('Play button (idle) has accent-fill background', async () => {
       await selectFirstNode();
       const isStop = await page.locator('#play-btn.is-stop').count();
       if (isStop > 0) {
-        await page.click('#play-btn');
-        await page.waitForFunction(
+        await page.click('#play-btn');   // get back to idle
+        await waitFor(
           () => !document.querySelector('#play-btn').classList.contains('is-stop'),
-          { timeout: 2000 }
+          2000, 'leave-stop-state'
         );
       }
-      // Wait for bg transition to fully settle on a non-transparent value.
-      await page.waitForFunction(() => {
-        const el = document.querySelector('#play-btn');
-        const bg = getComputedStyle(el).backgroundColor;
+      // Wait for bg transition to settle on a non-transparent, opaque value.
+      await waitFor(() => {
+        const bg = getComputedStyle(document.querySelector('#play-btn')).backgroundColor;
         if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') return false;
-        // Mid-transition values have alpha < 1; wait for opaque.
         const m = bg.match(/[\/,]\s*([\d.]+)\s*\)/);
         const alpha = m ? parseFloat(m[1]) : 1;
         return alpha > 0.99;
-      }, { timeout: 1000 });
+      }, 1000, 'idle-bg-settle');
     });
 
     await run('Stop button (playing) has transparent background', async () => {
       await page.click('#play-btn');   // enter playback
-      await page.waitForFunction(
+      await waitFor(
         () => document.querySelector('#play-btn').classList.contains('is-stop'),
-        { timeout: 2000 }
+        2000, 'is-stop-class-applied'
       );
-      // Wait for background to actually transition to transparent (not the
-      // mid-transition alpha 0.97 from the accent fill we just left).
-      await page.waitForFunction(() => {
-        const el = document.querySelector('#play-btn');
-        const bg = getComputedStyle(el).backgroundColor;
+      // Move the mouse off the button — page.click() leaves the cursor
+      // hovering, which would activate :hover styles and change the
+      // expected background from `transparent` (.is-stop) to `var(--warn-bg)`
+      // (.is-stop:hover). Test the resting state, not the hover state.
+      await page.mouse.move(0, 0);
+      // Wait for bg to actually transition to transparent.
+      await waitFor(() => {
+        const bg = getComputedStyle(document.querySelector('#play-btn')).backgroundColor;
         return bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent' || /\/\s*0\s*\)/.test(bg);
-      }, { timeout: 1000 });
-      // Cleanup: leave button in idle state so subsequent tests start clean.
+      }, 1000, 'stop-bg-transparent');
+      // Cleanup
       await page.click('#play-btn');
     });
 
