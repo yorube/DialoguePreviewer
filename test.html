@@ -221,9 +221,11 @@
   });
 
   test('markupToSafeHtml escapes raw <script>', () => {
-    const out = YarnParser.markupToSafeHtml('<script>x</script>');
-    assert(!out.includes('<script>'), 'raw script tag must be escaped');
-    assert(out.includes('&lt;') === false || !out.includes('<script>'));
+    // Avoid literal </script> inside this inline block (would close the
+    // <script> tag early); build the marker via concatenation.
+    const danger = '<' + 'script>x<' + '/script>';
+    const out = YarnParser.markupToSafeHtml(danger);
+    assert(!out.toLowerCase().includes('<script>'), 'raw script tag must be escaped');
   });
 
   test('markupToSafeHtml passes <i><b><u>', () => {
