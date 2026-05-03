@@ -7,15 +7,18 @@
 // 設計原則：
 //   - inline edit 優先：同一個 UID 同時有 upload 與 inline，inline 蓋掉 upload
 //   - upload 重新覆寫時提醒（會吃掉現有的 upload baseline，但保留 inline edits）
-//   - 每筆操作即時 persist 到 localStorage（key = mbu-yarn-translation-{locale}）
+//   - 每筆操作即時 persist 到 localStorage（key = yp.translation.{locale}）
 
 (function (global) {
     'use strict';
 
-    const STORAGE_PREFIX = 'mbu-yarn-translation-';
-    // v2: source rows no longer persisted (was the cause of localStorage
-    // quota failures). Bumping version invalidates v1 payloads cleanly.
-    const STORAGE_VERSION = 2;
+    // Single namespace `yp.*` shared with ui.js's per-feature keys
+    // (yp.lang / yp.notes / yp.layout / yp.activePage / yp.exportState) and
+    // ui-strings.js (yp.uiStrings / yp.uiStrings.exportState).
+    const STORAGE_PREFIX = 'yp.translation.';
+    // Bump on schema break. Old payloads (different prefix or different v)
+    // are ignored on load — no migration code, by design.
+    const STORAGE_VERSION = 3;
 
     /**
      * 每個 locale 一個 State 實例。

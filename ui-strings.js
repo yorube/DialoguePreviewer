@@ -18,16 +18,20 @@
 //     section headers, not rows in the table.
 //
 // Persistence: the entire imported workbook (headers + rows) is held in
-// localStorage under `mbu-ui-strings`. Edits mutate cells in place and
+// localStorage under `yp.uiStrings`. Edits mutate cells in place and
 // re-save. Re-importing replaces the whole workbook. Export rebuilds the
 // xlsx from the in-memory state, preserving sheet order, column order, and
 // every original row (including dividers).
+//
+// i18n: all visible strings (toolbar labels, status messages, alerts,
+// table empty states, cell-empty marker) go through window.YP.t (exposed
+// by ui.js). Lang-change re-render is wired via window.YP.onLangChange.
 
 (function (global) {
   'use strict';
 
-  const LS_KEY = 'mbu-ui-strings';
-  const LS_EXPORT_KEY = 'mbu-ui-strings.exportState';
+  const LS_KEY = 'yp.uiStrings';
+  const LS_EXPORT_KEY = 'yp.uiStrings.exportState';
 
   const STATE = {
     // workbook: { fileName, sheets: [{ name, headers, rows: [[...]] }] }
@@ -38,6 +42,15 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // i18n shims — fall back to the key when YP isn't ready (e.g. ui.js
+  // failed to load). All visible strings funnel through here.
+  function t(key, params) {
+    return (global.YP && global.YP.t) ? global.YP.t(key, params) : key;
+  }
+  function applyI18n() {
+    if (global.YP && global.YP.applyI18n) global.YP.applyI18n();
+  }
+
   function init() {
     const root = $('page-ui-strings');
     if (!root) return;
@@ -47,6 +60,15 @@
     renderSheetTabs();
     renderTable();
     refreshExportStatus();
+    applyI18n();
+    // Re-render dynamic (non-data-i18n) text whenever the language flips.
+    if (global.YP && global.YP.onLangChange) {
+      global.YP.onLangChange(() => {
+        renderSheetTabs();    // sheet tab tooltip = "{n} rows"
+        renderTable();        // counter, empty state, cell-empty marker
+        refreshExportStatus();
+      });
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -73,7 +95,7 @@
       localStorage.setItem(LS_KEY, JSON.stringify(STATE.workbook));
     } catch (e) {
       console.error('[ui-strings] save failed (likely quota):', e);
-      alert('儲存到 localStorage 失敗（可能容量不夠）：' + e.message + '\n\n請按 💾 匯出 .xlsx 把目前狀態存到檔案。');
+      alert(t('ui.alert.persistFailed', { msg: e.message }));
     }
   }
 
@@ -101,13 +123,16 @@
     const el = $('ui-strings-status');
     if (!el) return;
     if (!STATE.workbook) {
-      el.textContent = '尚未匯入任何檔案';
+      el.textContent = t('ui.status.empty');
       el.className = 'ui-strings-status muted';
       return;
     }
     const s = getExportState();
     if (!s.lastEditAt) {
-      el.textContent = `已匯入：${STATE.workbook.fileName} (${STATE.workbook.sheets.length} sheet)`;
+      el.textContent = t('ui.status.loaded', {
+        file: STATE.workbook.fileName,
+        n: STATE.workbook.sheets.length,
+      });
       el.className = 'ui-strings-status clean';
       return;
     }
@@ -115,11 +140,17 @@
       || new Date(s.lastEditAt).getTime() > new Date(s.lastExportAt).getTime();
     if (dirty) {
       el.textContent = s.lastExportAt
-        ? `⚠️ 有未匯出的編輯（上次匯出 ${formatDate(s.lastExportAt)}，${formatAgo(Date.now() - new Date(s.lastExportAt).getTime())} 前）`
-        : '⚠️ 有未匯出的編輯，還沒匯出過';
+        ? t('ui.status.dirtyKnown', {
+            date: formatDate(s.lastExportAt),
+            ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()),
+          })
+        : t('ui.status.dirtyNever');
       el.className = 'ui-strings-status dirty';
     } else {
-      el.textContent = `✓ 已存檔 ${formatDate(s.lastExportAt)}（${formatAgo(Date.now() - new Date(s.lastExportAt).getTime())} 前）`;
+      el.textContent = t('ui.status.clean', {
+        date: formatDate(s.lastExportAt),
+        ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()),
+      });
       el.className = 'ui-strings-status clean';
     }
   }
@@ -154,19 +185,19 @@
   function renderShell() {
     return `
     <header class="topbar topbar-ui-strings">
-     <span class="brand">UI Strings</span>
-     <label class="ctrl ctrl-import">
-      <span>📥 匯入 .xlsx</span>
-      <input type="file" id="ui-strings-import" accept=".xlsx,.xls">
-     </label>
-     <button id="ui-strings-export" class="ctrl-btn">💾 匯出 .xlsx</button>
-     <button id="ui-strings-reset" class="ctrl-btn danger">🗑 清空</button>
-     <span id="ui-strings-status" class="ui-strings-status muted">尚未匯入任何檔案</span>
+      <span class="brand" data-i18n="ui.brand">UI Strings</span>
+      <label class="ctrl ctrl-import">
+        <span data-i18n="ui.import">📥 Import .xlsx</span>
+        <input type="file" id="ui-strings-import" accept=".xlsx,.xls">
+      </label>
+      <button id="ui-strings-export" class="ctrl-btn" data-i18n="ui.export">💾 Export .xlsx</button>
+      <button id="ui-strings-reset" class="ctrl-btn danger" data-i18n="ui.reset">🗑 Clear</button>
+      <span id="ui-strings-status" class="ui-strings-status muted"></span>
     </header>
     <div id="ui-strings-sheet-tabs" class="ui-strings-sheet-tabs"></div>
     <div class="ui-strings-toolbar">
-     <input id="ui-strings-filter" type="search" placeholder="篩選 Key…" class="ui-strings-filter">
-     <span id="ui-strings-counter" class="ui-strings-counter"></span>
+      <input id="ui-strings-filter" type="search" data-i18n-placeholder="ui.filter.placeholder" class="ui-strings-filter">
+      <span id="ui-strings-counter" class="ui-strings-counter"></span>
     </div>
     <div id="ui-strings-view" class="ui-strings-view"></div>
     `;
@@ -191,7 +222,7 @@
     ev.target.value = '';
     if (!file) return;
     if (typeof XLSX === 'undefined') {
-      alert('xlsx parser not loaded');
+      alert(t('ui.alert.parserMissing'));
       return;
     }
     const buf = await file.arrayBuffer();
@@ -199,7 +230,7 @@
     try {
       wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
     } catch (e) {
-      alert('解析 .xlsx 失敗：' + e.message);
+      alert(t('ui.alert.parseFailed', { msg: e.message }));
       return;
     }
     const sheets = [];
@@ -219,7 +250,7 @@
       sheets.push({ name, headers, rows });
     }
     if (!sheets.length) {
-      alert('xlsx 內沒有可讀取的分頁。');
+      alert(t('ui.alert.noSheets'));
       return;
     }
     STATE.workbook = { fileName: file.name, sheets };
@@ -232,16 +263,20 @@
     renderSheetTabs();
     renderTable();
     refreshExportStatus();
-    alert(`已匯入 ${file.name}\n  ${sheets.length} 個分頁\n  ${sheets.reduce((n, s) => n + s.rows.length, 0)} 列`);
+    alert(t('ui.alert.imported', {
+      file: file.name,
+      sheets: sheets.length,
+      rows: sheets.reduce((n, s) => n + s.rows.length, 0),
+    }));
   }
 
   function onExport() {
     if (!STATE.workbook || !STATE.workbook.sheets.length) {
-      alert('沒有可匯出的內容，請先匯入一份 .xlsx。');
+      alert(t('ui.alert.nothingToExport'));
       return;
     }
     if (typeof XLSX === 'undefined') {
-      alert('xlsx writer not loaded');
+      alert(t('ui.alert.writerMissing'));
       return;
     }
     const wb = XLSX.utils.book_new();
@@ -269,11 +304,10 @@
 
   function onReset() {
     if (!STATE.workbook) {
-      alert('目前沒有資料。');
+      alert(t('ui.alert.nothingToReset'));
       return;
     }
-    const ok = confirm('確定要清空當前 UI 字串資料嗎？\n\n本地的所有編輯會全部丟掉，需要重新匯入 .xlsx。\n（建議先按 💾 匯出 .xlsx 留底）');
-    if (!ok) return;
+    if (!confirm(t('ui.confirm.reset'))) return;
     STATE.workbook = null;
     STATE.activeSheet = null;
     STATE.filter = '';
@@ -305,7 +339,7 @@
       btn.className = 'ui-strings-sheet-tab';
       if (sheet.name === STATE.activeSheet) btn.classList.add('active');
       btn.textContent = sheet.name;
-      btn.title = `${sheet.rows.length} rows`;
+      btn.title = t('ui.tab.tip', { n: sheet.rows.length });
       btn.addEventListener('click', () => {
         if (STATE.activeSheet === sheet.name) return;
         STATE.activeSheet = sheet.name;
@@ -329,18 +363,25 @@
     if (!view) return;
     view.innerHTML = '';
     if (!STATE.workbook) {
-      view.innerHTML = '<div class="ui-strings-empty">沒有資料。請按上方 📥 匯入 .xlsx。</div>';
+      const empty = document.createElement('div');
+      empty.className = 'ui-strings-empty';
+      empty.textContent = t('ui.empty.noWorkbook');
+      view.appendChild(empty);
       if (counter) counter.textContent = '';
       return;
     }
     const sheet = STATE.workbook.sheets.find(s => s.name === STATE.activeSheet);
     if (!sheet) {
-      view.innerHTML = '<div class="ui-strings-empty">找不到分頁。</div>';
+      const empty = document.createElement('div');
+      empty.className = 'ui-strings-empty';
+      empty.textContent = t('ui.empty.noSheet');
+      view.appendChild(empty);
       if (counter) counter.textContent = '';
       return;
     }
 
     const filter = STATE.filter;
+    const emptyMarker = t('ui.cell.empty');
 
     const tableWrap = document.createElement('div');
     tableWrap.className = 'ui-strings-table-wrap';
@@ -402,9 +443,13 @@
           td.textContent = text;
         } else {
           td.classList.add('ui-cell-text');
-          if (!text) td.classList.add('ui-cell-empty');
-          td.textContent = text;
-          td.addEventListener('click', () => openCellEditor(td, sheet, rIdx, c));
+          if (!text) {
+            td.classList.add('ui-cell-empty');
+            td.textContent = emptyMarker;
+          } else {
+            td.textContent = text;
+          }
+          td.addEventListener('click', () => openCellEditor(td, sheet, rIdx, c, emptyMarker));
         }
         tr.appendChild(td);
       }
@@ -418,12 +463,12 @@
     if (counter) {
       const total = sheet.rows.length;
       counter.textContent = filter
-        ? `顯示 ${visibleCount} / ${total} 列`
-        : `共 ${total} 列`;
+        ? t('ui.counter.filtered', { visible: visibleCount, total })
+        : t('ui.counter.total', { total });
     }
   }
 
-  function openCellEditor(td, sheet, rIdx, cIdx) {
+  function openCellEditor(td, sheet, rIdx, cIdx, emptyMarker) {
     if (td.querySelector('.ui-cell-editor')) return;
     const original = sheet.rows[rIdx][cIdx] != null ? String(sheet.rows[rIdx][cIdx]) : '';
     const prevHtml = td.innerHTML;
@@ -469,9 +514,13 @@
       }
       // Re-render only this cell to avoid losing scroll position.
       td.className = prevClass.replace('ui-cell-empty', '').trim();
-      if (!newText) td.classList.add('ui-cell-empty');
       td.innerHTML = '';
-      td.textContent = newText;
+      if (!newText) {
+        td.classList.add('ui-cell-empty');
+        td.textContent = emptyMarker;
+      } else {
+        td.textContent = newText;
+      }
     });
     ta.addEventListener('keydown', (ev) => {
       if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); close(); }

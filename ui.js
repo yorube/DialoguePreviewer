@@ -186,6 +186,32 @@
       'tr.export.ago.days': '{n}d',
       'flat.end.tip': 'Dialogue ends here',
       'flat.goto.tip': 'Jump to @{label}',
+      // ----- UI Strings page -----
+      'ui.brand': 'UI Strings',
+      'ui.import': '📥 Import .xlsx',
+      'ui.export': '💾 Export .xlsx',
+      'ui.reset': '🗑 Clear',
+      'ui.filter.placeholder': 'Filter Key…',
+      'ui.status.empty': 'No file imported yet',
+      'ui.status.loaded': 'Imported: {file} ({n} sheet)',
+      'ui.status.dirtyKnown': '⚠️ Unexported edits (last export {date}, {ago} ago)',
+      'ui.status.dirtyNever': '⚠️ Unexported edits, never exported',
+      'ui.status.clean': '✓ Saved {date} ({ago} ago)',
+      'ui.counter.filtered': 'Showing {visible} / {total} rows',
+      'ui.counter.total': '{total} rows',
+      'ui.empty.noWorkbook': 'No data. Click 📥 Import .xlsx above.',
+      'ui.empty.noSheet': 'Sheet not found.',
+      'ui.cell.empty': '— empty —',
+      'ui.tab.tip': '{n} rows',
+      'ui.alert.persistFailed': 'Save to localStorage failed (likely quota): {msg}\n\nClick 💾 Export .xlsx to save the current state to a file.',
+      'ui.alert.parserMissing': 'xlsx parser not loaded',
+      'ui.alert.parseFailed': 'Failed to parse .xlsx: {msg}',
+      'ui.alert.noSheets': 'The .xlsx has no readable sheets.',
+      'ui.alert.imported': 'Imported {file}\n  {sheets} sheet(s)\n  {rows} rows',
+      'ui.alert.nothingToExport': 'Nothing to export. Import an .xlsx first.',
+      'ui.alert.writerMissing': 'xlsx writer not loaded',
+      'ui.alert.nothingToReset': 'Nothing to reset.',
+      'ui.confirm.reset': 'Clear all UI strings data?\n\nAll local edits will be lost; you will need to re-import the .xlsx.\n(Recommended: export to .xlsx first as a backup.)',
       'help.btn': '❔ Help',
       'help.btn.tip': 'Open the help dialog',
       'help.title': 'How to use this previewer',
@@ -375,6 +401,32 @@
       'tr.export.ago.days': '{n} 天',
       'flat.end.tip': '對話在這裡結束',
       'flat.goto.tip': '點此跳到 @{label}',
+      // ----- UI Strings 分頁 -----
+      'ui.brand': 'UI 字串',
+      'ui.import': '📥 匯入 .xlsx',
+      'ui.export': '💾 匯出 .xlsx',
+      'ui.reset': '🗑 清空',
+      'ui.filter.placeholder': '篩選 Key…',
+      'ui.status.empty': '尚未匯入任何檔案',
+      'ui.status.loaded': '已匯入：{file}（{n} 個分頁）',
+      'ui.status.dirtyKnown': '⚠️ 有未匯出的編輯（上次匯出 {date}，{ago} 前）',
+      'ui.status.dirtyNever': '⚠️ 有未匯出的編輯，還沒匯出過',
+      'ui.status.clean': '✓ 已存檔 {date}（{ago} 前）',
+      'ui.counter.filtered': '顯示 {visible} / {total} 列',
+      'ui.counter.total': '共 {total} 列',
+      'ui.empty.noWorkbook': '沒有資料。請按上方 📥 匯入 .xlsx。',
+      'ui.empty.noSheet': '找不到分頁。',
+      'ui.cell.empty': '— 空 —',
+      'ui.tab.tip': '{n} 列',
+      'ui.alert.persistFailed': '儲存到 localStorage 失敗（可能容量不夠）：{msg}\n\n請按 💾 匯出 .xlsx 把目前狀態存到檔案。',
+      'ui.alert.parserMissing': 'xlsx parser 未載入',
+      'ui.alert.parseFailed': '解析 .xlsx 失敗：{msg}',
+      'ui.alert.noSheets': 'xlsx 內沒有可讀取的分頁。',
+      'ui.alert.imported': '已匯入 {file}\n  {sheets} 個分頁\n  {rows} 列',
+      'ui.alert.nothingToExport': '沒有可匯出的內容，請先匯入一份 .xlsx。',
+      'ui.alert.writerMissing': 'xlsx writer 未載入',
+      'ui.alert.nothingToReset': '目前沒有資料。',
+      'ui.confirm.reset': '確定要清空當前 UI 字串資料嗎？\n\n本地的所有編輯會全部丟掉，需要重新匯入 .xlsx。\n（建議先按 💾 匯出 .xlsx 留底）',
       'help.btn': '❔ 說明',
       'help.btn.tip': '開啟說明視窗',
       'help.title': '使用說明',
@@ -469,6 +521,7 @@
     }
   }
 
+  const __langChangeListeners = new Set();
   function setLang(lang) {
     if (!I18N[lang]) lang = 'en';
     currentLang = lang;
@@ -481,7 +534,24 @@
     syncOverrideMarkers();
     const cont = document.querySelector('.continue-btn');
     if (cont) cont.textContent = t('btn.continue');
+    // Notify sibling modules (ui-strings.js) so their dynamic
+    // (non-data-i18n) text updates too.
+    for (const cb of __langChangeListeners) {
+      try { cb(lang); } catch (e) { console.error('[i18n] listener', e); }
+    }
   }
+
+  // Sibling-module i18n surface — exposed on window so ui-strings.js (and
+  // any future sibling page) can share this app's translation table without
+  // duplicating it.
+  window.YP = window.YP || {};
+  window.YP.t = t;
+  window.YP.applyI18n = applyI18n;
+  window.YP.getLang = () => currentLang;
+  window.YP.onLangChange = (cb) => {
+    __langChangeListeners.add(cb);
+    return () => __langChangeListeners.delete(cb);
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // §3  Global state

@@ -2117,7 +2117,7 @@ body.page-ui-strings .help-overlay { display: none; }
   outline-offset: -1px;
 }
 .ui-cell-empty { color: var(--fg-dim); font-style: italic; opacity: 0.5; }
-.ui-cell-empty::before { content: '— 空 —'; opacity: 0.6; }
+/* Cell-empty marker text comes from i18n via ui-strings.js, not a CSS pseudo. */
 
 .ui-strings-divider td {
   background: color-mix(in oklab, var(--info) 12%, transparent);
