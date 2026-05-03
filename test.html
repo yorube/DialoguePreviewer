@@ -221,8 +221,11 @@
   });
 
   test('markupToSafeHtml escapes raw <script>', () => {
-    // Avoid literal </script> inside this inline block (would close the
-    // <script> tag early); build the marker via concatenation.
+    // The HTML parser closes the surrounding inline script as soon as it
+    // sees the literal byte sequence for an end tag — even inside a JS
+    // string or comment. So both the marker AND every reference to it
+    // (this comment included) must avoid putting "<" immediately before
+    // "/script>". Concatenation does the job.
     const danger = '<' + 'script>x<' + '/script>';
     const out = YarnParser.markupToSafeHtml(danger);
     assert(!out.toLowerCase().includes('<script>'), 'raw script tag must be escaped');
