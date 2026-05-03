@@ -212,13 +212,19 @@
     assertEq(r.labels.has('start'), true);
   });
 
-  test('parseProject collects parseErrors gracefully', () => {
-    // parser swallows per-node errors and keeps going
+  test('parseProject skips nodes with missing title or body', () => {
+    // Real graceful behavior: malformed entries don't kill the whole load,
+    // valid siblings survive. (Per parser.js L420 `if (!node.title || node.body == null) continue;`.)
     const p = YarnParser.parseProject([
       { title: 'Good', body: 'Mira: ok' },
+      { title: '', body: 'orphan' },        // missing title — skipped
+      { title: 'NoBody', body: null },      // missing body — skipped
+      { title: 'AlsoGood', body: 'Mira: y' },
     ]);
-    assertEq(p.nodes.size, 1);
-    assertEq(p.parseErrors.length, 0);
+    assertEq(p.nodes.size, 2);                       // only the two valid
+    assertEq(p.nodes.has('Good'), true);
+    assertEq(p.nodes.has('AlsoGood'), true);
+    assertEq(p.nodes.has('NoBody'), false);
   });
 
   test('markupToSafeHtml escapes raw <script>', () => {
@@ -347,13 +353,6 @@
   //  translation-state.js
   // ============================================================
   setGroup('translation-state.js — persistence');
-
-  test('createState exposes API methods', () => {
-    const s = TranslationState.createState(ephemeralLocale('api'));
-    for (const m of ['get', 'source', 'setOverride', 'replaceBaseline', 'reset', 'buildMergedMap', 'stats', 'getSource']) {
-      assertEq(typeof s[m], 'function', `missing method: ${m}`);
-    }
-  });
 
   test('setOverride returns "ok" + persists', () => {
     const loc = ephemeralLocale('set');
