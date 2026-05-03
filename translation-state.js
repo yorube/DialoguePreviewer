@@ -134,14 +134,6 @@
         function getSource() { return state.source; }
 
         /**
-         * 不動 baseline、清掉 overrides（譯者後悔站內改的，回到上傳的譯文）。
-         */
-        function clearOverrides() {
-            state.overrides = new Map();
-            return persist();
-        }
-
-        /**
          * 完全清空（debug / 重新開始）。
          */
         function reset() {
@@ -186,7 +178,6 @@
             source,
             setOverride,
             replaceBaseline,
-            clearOverrides,
             reset,
             buildMergedMap,
             stats,

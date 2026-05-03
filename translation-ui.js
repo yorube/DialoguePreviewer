@@ -10,1140 +10,955 @@
 //          XLSX (SheetJS)、JSZip
 
 (function (global) {
-    'use strict';
+  'use strict';
 
-    const STATE = {
-        states: new Map(),               // locale → TranslationState
-        guids: null,                     // filename → guid
-        characterKeys: null,             // en-US name → Key
-        characterTranslations: null,     // Key → { locale → name }
-        ready: false,
-        translationMode: false,
-        hooks: null,
-    };
+  const STATE = {
+    states: new Map(),               // locale → TranslationState
+    guids: null,                     // filename → guid
+    characterKeys: null,             // en-US name → Key
+    characterTranslations: null,     // Key → { locale → name }
+    ready: false,
+    translationMode: false,
+    hooks: null,
+  };
 
-    let loadingPromise = null;
+  let loadingPromise = null;
 
-    function t(key, params) {
-        if (STATE.hooks && STATE.hooks.t) return STATE.hooks.t(key, params);
-        return key;
+  function t(key, params) {
+    if (STATE.hooks && STATE.hooks.t) return STATE.hooks.t(key, params);
+    return key;
+  }
+
+  function refreshI18n() {
+    if (STATE.hooks && STATE.hooks.applyI18n) STATE.hooks.applyI18n();
+  }
+
+  /** 由 ui.js 在 init 時呼叫 */
+  function install(hooks) {
+    STATE.hooks = hooks;
+    injectToolbar();
+    ensureLoaded();
+    // 初始 stats 顯示
+    updateStats();
+    refreshExportStatus();
+  }
+
+  async function ensureLoaded() {
+    if (STATE.ready) return;
+    if (loadingPromise) return loadingPromise;
+    loadingPromise = (async () => {
+      try { STATE.guids = await fetchJson('data/guids.json'); }
+      catch (e) { console.warn('[translation-ui] guids.json missing:', e.message); STATE.guids = {}; }
+      try { STATE.characterKeys = await fetchJson('data/character-keys.json'); }
+      catch (e) { STATE.characterKeys = {}; }
+      try { STATE.characterTranslations = await fetchJson('data/character-translations.json'); }
+      catch (e) { STATE.characterTranslations = {}; }
+      try { STATE.speakerGender = await fetchJson('data/speakers.json'); }
+      catch (e) { STATE.speakerGender = {}; }
+      STATE.ready = true;
+      updateStats();
+    })();
+    return loadingPromise;
+  }
+
+  async function fetchJson(url) {
+    const r = await fetch(url, { cache: 'no-cache' });
+    if (!r.ok) throw new Error(`fetch ${url} failed: HTTP ${r.status}`);
+    return await r.json();
+  }
+
+  // ----- UI 注入（樣式統一由 style.css 管理） -----
+
+  function injectToolbar() {
+    // 第二行 topbar：Upload / Download / Reset / stats
+    const ops = document.getElementById('topbar-globalops');
+    if (ops) {
+      // Upload (file label)
+      const uploadLabel = document.createElement('label');
+      uploadLabel.className = 'ctrl t-ctrl';
+      uploadLabel.dataset.i18nTitle = 'tr.upload.tip';
+      const uploadText = document.createElement('span');
+      uploadText.dataset.i18n = 'tr.upload';
+      uploadText.textContent = '📥 Import translation file';
+      const uploadInput = document.createElement('input');
+      uploadInput.type = 'file';
+      uploadInput.id = 't-upload-input';
+      uploadInput.accept = '.csv,.xlsx,.xls';
+      uploadInput.className = 't-file';
+      uploadInput.addEventListener('change', onUpload);
+      uploadLabel.appendChild(uploadText);
+      uploadLabel.appendChild(uploadInput);
+      ops.appendChild(uploadLabel);
+
+      // Download
+      const dlBtn = document.createElement('button');
+      dlBtn.id = 't-download-loc';
+      dlBtn.className = 'ctrl t-ctrl';
+      dlBtn.type = 'button';
+      dlBtn.dataset.i18n = 'tr.download';
+      dlBtn.dataset.i18nTitle = 'tr.download.tip';
+      dlBtn.textContent = '💾 Export translation file';
+      dlBtn.addEventListener('click', onDownloadLocFile);
+      ops.appendChild(dlBtn);
+
+      // Reset
+      const rstBtn = document.createElement('button');
+      rstBtn.id = 't-reset';
+      rstBtn.className = 'ctrl t-ctrl danger';
+      rstBtn.type = 'button';
+      rstBtn.dataset.i18n = 'tr.reset';
+      rstBtn.dataset.i18nTitle = 'tr.reset.tip';
+      rstBtn.textContent = '🔁 Reset this language';
+      rstBtn.addEventListener('click', onResetLocale);
+      ops.appendChild(rstBtn);
+
+      // Stats（右側）
+      const stats = document.createElement('span');
+      stats.id = 't-stats';
+      stats.className = 't-stats';
+      ops.appendChild(stats);
+
+      // Export-state indicator (✓ saved / ⚠️ unexported edits).
+      const expStatus = document.createElement('span');
+      expStatus.id = 't-export-status';
+      expStatus.className = 't-export-status';
+      ops.appendChild(expStatus);
     }
 
-    function refreshI18n() {
-        if (STATE.hooks && STATE.hooks.applyI18n) STATE.hooks.applyI18n();
+    // 對話介面最上方：Edit Mode toggle + 旁邊的 ? 說明按鈕
+    const modebar = document.getElementById('dialogue-modebar');
+    if (modebar) {
+      const toggle = document.createElement('button');
+      toggle.id = 't-mode-toggle';
+      toggle.className = 'ctrl t-ctrl';
+      toggle.type = 'button';
+      toggle.dataset.i18n = 'tr.editMode';
+      toggle.dataset.i18nTitle = 'tr.editMode.tip';
+      toggle.textContent = '✏️ Translation Edit Mode';
+      toggle.addEventListener('click', toggleMode);
+      modebar.appendChild(toggle);
+
+      // ? — opens a dedicated Edit Mode help modal (separate from the
+      // global ? in the top bar). Content is Edit Mode-specific: flat
+      // view symbols, the inline editor flow, clickable goto labels —
+      // things only relevant once you're already in Edit Mode.
+      const help = document.createElement('button');
+      help.id = 't-mode-help';
+      help.className = 'help-btn t-mode-help';
+      help.type = 'button';
+      help.textContent = '?';
+      help.dataset.i18nTitle = 'tr.editMode.help.tip';
+      help.title = '?';
+      help.addEventListener('click', openEditModeHelp);
+      modebar.appendChild(help);
     }
+  }
 
-    /** 由 ui.js 在 init 時呼叫 */
-    function install(hooks) {
-        STATE.hooks = hooks;
-        injectStyles();
-        injectToolbar();
-        ensureLoaded();
-        // 初始 stats 顯示
-        updateStats();
-        refreshExportStatus();
-    }
+  // ----- Dedicated Edit Mode help modal -----
 
-    async function ensureLoaded() {
-        if (STATE.ready) return;
-        if (loadingPromise) return loadingPromise;
-        loadingPromise = (async () => {
-            try { STATE.guids = await fetchJson('data/guids.json'); }
-            catch (e) { console.warn('[translation-ui] guids.json missing:', e.message); STATE.guids = {}; }
-            try { STATE.characterKeys = await fetchJson('data/character-keys.json'); }
-            catch (e) { STATE.characterKeys = {}; }
-            try { STATE.characterTranslations = await fetchJson('data/character-translations.json'); }
-            catch (e) { STATE.characterTranslations = {}; }
-            try { STATE.speakerGender = await fetchJson('data/speakers.json'); }
-            catch (e) { STATE.speakerGender = {}; }
-            STATE.ready = true;
-            updateStats();
-        })();
-        return loadingPromise;
-    }
+  function openEditModeHelp() {
+    let overlay = document.getElementById('t-editmode-help-overlay');
+    if (!overlay) overlay = createEditModeHelpModal();
+    overlay.hidden = false;
+    // Reset scroll so opening always lands at the top.
+    const dialog = overlay.querySelector('.help-dialog');
+    if (dialog) dialog.scrollTop = 0;
+  }
 
-    async function fetchJson(url) {
-        const r = await fetch(url, { cache: 'no-cache' });
-        if (!r.ok) throw new Error(`fetch ${url} failed: HTTP ${r.status}`);
-        return await r.json();
-    }
+  function createEditModeHelpModal() {
+    const overlay = document.createElement('div');
+    overlay.id = 't-editmode-help-overlay';
+    overlay.className = 'help-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
 
-    // ----- UI 注入 -----
+    const dialog = document.createElement('div');
+    dialog.className = 'help-dialog';
 
-    function injectStyles() {
-        const css = `
-        .ctrl.t-ctrl {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 10px;
-            background: rgba(120, 180, 255, 0.10);
-            border: 1px solid rgba(120, 180, 255, 0.30);
-            border-radius: 4px;
-            cursor: pointer;
-            user-select: none;
-            font-size: 13px;
-            color: var(--fg);
-        }
-        .ctrl.t-ctrl:hover { background: rgba(120, 180, 255, 0.22); }
-        .ctrl.t-ctrl.danger { background: rgba(220, 120, 120, 0.10); border-color: rgba(220, 120, 120, 0.35); }
-        .ctrl.t-ctrl.danger:hover { background: rgba(220, 120, 120, 0.22); }
-        .ctrl.t-ctrl.active {
-            background: rgba(80, 180, 100, 0.25);
-            border-color: rgba(80, 180, 100, 0.7);
-        }
-        input[type="file"].t-file { display: none; }
-        .t-stats {
-            font-size: 11px;
-            color: var(--fg-dim);
-            font-family: ui-monospace, "Cascadia Code", monospace;
-            white-space: nowrap;
-            align-self: center;
-        }
-        .t-export-status {
-            font-size: 11px;
-            font-family: ui-monospace, "Cascadia Code", monospace;
-            padding: 2px 8px;
-            border-radius: 3px;
-            white-space: nowrap;
-        }
-        .t-export-status:empty { display: none; }
-        .t-export-status.dirty {
-            color: #e0c060;
-            background: rgba(220, 200, 100, 0.10);
-            border: 1px solid rgba(220, 200, 100, 0.30);
-        }
-        .t-export-status.clean {
-            color: #88e088;
-        }
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'help-close';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', () => { overlay.hidden = true; });
 
-        .row-line.t-untranslated .text,
-        .row-choice.t-untranslated .choice-text {
-            opacity: 0.55;
-            font-style: italic;
-        }
-        .row-line.t-overridden .text,
-        .row-choice.t-overridden .choice-text {
-            border-left: 2px solid #88c8ff;
-            padding-left: 4px;
-        }
-        .row-line .t-edit-btn,
-        .row-choice .t-edit-btn {
-            margin-left: 6px;
-            padding: 0 4px;
-            background: transparent;
-            border: 1px solid transparent;
-            border-radius: 3px;
-            cursor: pointer;
-            opacity: 0.4;
-            color: inherit;
-            font-size: 12px;
-        }
-        .row-line:hover .t-edit-btn,
-        .row-choice:hover .t-edit-btn { opacity: 1; }
-        .row-line .t-edit-btn:hover,
-        .row-choice .t-edit-btn:hover { background: rgba(255,255,255,0.08); border-color: #555; }
-        /* Choice wrapper: keep button + ✏️ + editor on the same flow. */
-        .row-choice { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px; margin: 2px 0; }
-        .row-choice .choice-btn { flex: 1 1 auto; }
-        .row-choice .t-inline-editor { flex-basis: 100%; margin-left: 0; }
+    const h2 = document.createElement('h2');
+    h2.dataset.i18n = 'tr.editMode.help.title';
+    h2.textContent = 'Edit Mode help';
 
-        /* Flat edit view — entire node expanded. Hidden by default; shown only
-           when body.t-edit-mode is on (set by ui.js). Transcript is hidden then. */
-        .flat-edit-view { display: none; padding: 8px 12px; overflow: auto; flex: 1; min-height: 0; }
-        body.t-edit-mode #transcript { display: none !important; }
-        body.t-edit-mode .flat-edit-view { display: block; }
-        .flat-node-title {
-            font-size: 13px;
-            font-weight: 600;
-            opacity: 0.7;
-            margin-bottom: 8px;
-            padding-bottom: 4px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .flat-edit-view .row-line.flat-row,
-        .flat-edit-view .row-choice.flat-row { margin: 4px 0; padding: 2px 0; }
-        .flat-edit-view .row-choice.flat-row { background: rgba(120, 180, 255, 0.04); border-left: 2px solid rgba(120, 180, 255, 0.4); padding-left: 6px; }
-        .flat-edit-view .row-choice .choice-num { color: #88c8ff; font-weight: 600; margin-right: 4px; }
-        .flat-cond { opacity: 0.55; font-size: 11px; font-family: ui-monospace, monospace; margin-left: 6px; }
-        .flat-branch {
-            font-family: ui-monospace, "Cascadia Code", monospace;
-            font-size: 11px;
-            color: #c8a878;
-            margin: 6px 0 2px;
-            opacity: 0.85;
-        }
-        .flat-branch-end { opacity: 0.5; }
-        .flat-meta {
-            font-family: ui-monospace, "Cascadia Code", monospace;
-            font-size: 11px;
-            color: var(--fg-dim, #888);
-            opacity: 0.6;
-            margin: 2px 0;
-        }
-        .flat-label { color: #88e088; opacity: 0.8; }
-        .flat-body { padding-left: 16px; border-left: 1px dashed rgba(255,255,255,0.08); margin-left: 4px; }
-        /* End-of-dialogue badge — bumped out of the dim flat-meta look. */
-        .flat-end {
-            display: inline-block;
-            font-size: 13px;
-            font-weight: 700;
-            font-family: inherit;
-            letter-spacing: 1px;
-            color: #d68a8a;
-            background: rgba(200, 100, 100, 0.10);
-            border: 1px solid rgba(200, 100, 100, 0.35);
-            border-radius: 4px;
-            padding: 4px 12px;
-            margin: 8px 0;
-            opacity: 1;
-            cursor: help;
-        }
-        /* Clickable goto target inside flat-meta rows. */
-        .flat-goto-target {
-            color: #88c8ff;
-            text-decoration: underline;
-            text-underline-offset: 2px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        .flat-goto-target:hover { color: #b8d8ff; }
-        /* Brief highlight pulse when goto scrolls a label into view. */
-        @keyframes flat-flash {
-            0%   { background: rgba(255, 230, 120, 0.28); }
-            100% { background: transparent; }
-        }
-        .flash-target { animation: flat-flash 1.5s ease-out; border-radius: 3px; }
-        /* In flat view, ✏️ is the primary action — keep it visible without hover. */
-        .flat-edit-view .t-edit-btn { opacity: 0.7; }
-        .flat-edit-view .row-line:hover .t-edit-btn,
-        .flat-edit-view .row-choice:hover .t-edit-btn { opacity: 1; }
+    const body = document.createElement('div');
+    body.className = 'help-body';
+    body.dataset.i18nHtml = 'tr.editMode.help.body';
 
-        .t-inline-editor {
-            display: flex;
-            gap: 4px;
-            margin-top: 4px;
-            margin-left: calc(1em + 4px);
-        }
-        .t-inline-editor textarea {
-            flex: 1;
-            min-height: 2em;
-            font: inherit;
-            background: rgba(0,0,0,0.3);
-            color: inherit;
-            border: 1px solid #88c8ff;
-            border-radius: 3px;
-            padding: 2px 4px;
-            resize: vertical;
-        }
-        .t-inline-editor .actions { display: flex; flex-direction: column; gap: 2px; }
-        .t-inline-editor button {
-            padding: 1px 6px;
-            background: transparent;
-            border: 1px solid #555;
-            border-radius: 3px;
-            color: inherit;
-            cursor: pointer;
-            font-size: 11px;
-        }
-        .t-inline-editor button.confirm { border-color: #6c6; }
-        .t-inline-editor button.cancel  { border-color: #c66; }
-        `;
-        const styleEl = document.createElement('style');
-        styleEl.textContent = css;
-        document.head.appendChild(styleEl);
-    }
+    dialog.appendChild(closeBtn);
+    dialog.appendChild(h2);
+    dialog.appendChild(body);
+    overlay.appendChild(dialog);
 
-    function injectToolbar() {
-        // 第二行 topbar：Upload / Download / Reset / stats
-        const ops = document.getElementById('topbar-globalops');
-        if (ops) {
-            // Upload (file label)
-            const uploadLabel = document.createElement('label');
-            uploadLabel.className = 'ctrl t-ctrl';
-            uploadLabel.dataset.i18nTitle = 'tr.upload.tip';
-            const uploadText = document.createElement('span');
-            uploadText.dataset.i18n = 'tr.upload';
-            uploadText.textContent = '📥 Import translation file';
-            const uploadInput = document.createElement('input');
-            uploadInput.type = 'file';
-            uploadInput.id = 't-upload-input';
-            uploadInput.accept = '.csv,.xlsx,.xls';
-            uploadInput.className = 't-file';
-            uploadInput.addEventListener('change', onUpload);
-            uploadLabel.appendChild(uploadText);
-            uploadLabel.appendChild(uploadInput);
-            ops.appendChild(uploadLabel);
-
-            // Download
-            const dlBtn = document.createElement('button');
-            dlBtn.id = 't-download-loc';
-            dlBtn.className = 'ctrl t-ctrl';
-            dlBtn.type = 'button';
-            dlBtn.dataset.i18n = 'tr.download';
-            dlBtn.dataset.i18nTitle = 'tr.download.tip';
-            dlBtn.textContent = '💾 Export translation file';
-            dlBtn.addEventListener('click', onDownloadLocFile);
-            ops.appendChild(dlBtn);
-
-            // Reset
-            const rstBtn = document.createElement('button');
-            rstBtn.id = 't-reset';
-            rstBtn.className = 'ctrl t-ctrl danger';
-            rstBtn.type = 'button';
-            rstBtn.dataset.i18n = 'tr.reset';
-            rstBtn.dataset.i18nTitle = 'tr.reset.tip';
-            rstBtn.textContent = '🔁 Reset this language';
-            rstBtn.addEventListener('click', onResetLocale);
-            ops.appendChild(rstBtn);
-
-            // Stats（右側）
-            const stats = document.createElement('span');
-            stats.id = 't-stats';
-            stats.className = 't-stats';
-            ops.appendChild(stats);
-
-            // Export-state indicator (✓ saved / ⚠️ unexported edits).
-            const expStatus = document.createElement('span');
-            expStatus.id = 't-export-status';
-            expStatus.className = 't-export-status';
-            ops.appendChild(expStatus);
-        }
-
-        // 對話介面最上方：Edit Mode toggle + 旁邊的 ? 說明按鈕
-        const modebar = document.getElementById('dialogue-modebar');
-        if (modebar) {
-            const toggle = document.createElement('button');
-            toggle.id = 't-mode-toggle';
-            toggle.className = 'ctrl t-ctrl';
-            toggle.type = 'button';
-            toggle.dataset.i18n = 'tr.editMode';
-            toggle.dataset.i18nTitle = 'tr.editMode.tip';
-            toggle.textContent = '✏️ Translation Edit Mode';
-            toggle.addEventListener('click', toggleMode);
-            modebar.appendChild(toggle);
-
-            // ? — opens a dedicated Edit Mode help modal (separate from the
-            // global ? in the top bar). Content is Edit Mode-specific: flat
-            // view symbols, the inline editor flow, clickable goto labels —
-            // things only relevant once you're already in Edit Mode.
-            const help = document.createElement('button');
-            help.id = 't-mode-help';
-            help.className = 'help-btn t-mode-help';
-            help.type = 'button';
-            help.textContent = '?';
-            help.dataset.i18nTitle = 'tr.editMode.help.tip';
-            help.title = '?';
-            help.addEventListener('click', openEditModeHelp);
-            modebar.appendChild(help);
-        }
-    }
-
-    // ----- Dedicated Edit Mode help modal -----
-
-    function openEditModeHelp() {
-        let overlay = document.getElementById('t-editmode-help-overlay');
-        if (!overlay) overlay = createEditModeHelpModal();
-        overlay.hidden = false;
-        // Reset scroll so opening always lands at the top.
-        const dialog = overlay.querySelector('.help-dialog');
-        if (dialog) dialog.scrollTop = 0;
-    }
-
-    function createEditModeHelpModal() {
-        const overlay = document.createElement('div');
-        overlay.id = 't-editmode-help-overlay';
-        overlay.className = 'help-overlay';
-        overlay.hidden = true;
-        overlay.setAttribute('role', 'dialog');
-        overlay.setAttribute('aria-modal', 'true');
-
-        const dialog = document.createElement('div');
-        dialog.className = 'help-dialog';
-
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'help-close';
-        closeBtn.type = 'button';
-        closeBtn.setAttribute('aria-label', 'Close');
-        closeBtn.textContent = '×';
-        closeBtn.addEventListener('click', () => { overlay.hidden = true; });
-
-        const h2 = document.createElement('h2');
-        h2.dataset.i18n = 'tr.editMode.help.title';
-        h2.textContent = 'Edit Mode help';
-
-        const body = document.createElement('div');
-        body.className = 'help-body';
-        body.dataset.i18nHtml = 'tr.editMode.help.body';
-
-        dialog.appendChild(closeBtn);
-        dialog.appendChild(h2);
-        dialog.appendChild(body);
-        overlay.appendChild(dialog);
-
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) overlay.hidden = true;
-        });
-        document.body.appendChild(overlay);
-
-        // First-time apply i18n so the dataset attributes resolve.
-        refreshI18n();
-        return overlay;
-    }
-
-    // Esc closes any visible help overlay (this Edit Mode one + the global ?).
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
-        const overlay = document.getElementById('t-editmode-help-overlay');
-        if (overlay && !overlay.hidden) overlay.hidden = true;
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.hidden = true;
     });
+    document.body.appendChild(overlay);
 
-    function toggleMode() { setMode(!STATE.translationMode); }
+    // First-time apply i18n so the dataset attributes resolve.
+    refreshI18n();
+    return overlay;
+  }
 
-    function setMode(on) {
-        on = !!on;
-        if (STATE.translationMode === on) return;
-        STATE.translationMode = on;
-        const toggle = document.getElementById('t-mode-toggle');
-        if (toggle) toggle.classList.toggle('active', STATE.translationMode);
-        if (STATE.translationMode) ensureLoaded();
-        updateStats();
-        if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
-        // Notify host so it can keep mutually-exclusive modes (e.g. Compare Mode) in sync.
-        if (STATE.hooks && STATE.hooks.onEditModeChange) {
-            STATE.hooks.onEditModeChange(STATE.translationMode);
-        }
+  // Esc closes any visible help overlay (this Edit Mode one + the global ?).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const overlay = document.getElementById('t-editmode-help-overlay');
+    if (overlay && !overlay.hidden) overlay.hidden = true;
+  });
+
+  function toggleMode() { setMode(!STATE.translationMode); }
+
+  function setMode(on) {
+    on = !!on;
+    if (STATE.translationMode === on) return;
+    STATE.translationMode = on;
+    const toggle = document.getElementById('t-mode-toggle');
+    if (toggle) toggle.classList.toggle('active', STATE.translationMode);
+    if (STATE.translationMode) ensureLoaded();
+    updateStats();
+    if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+    // Notify host so it can keep mutually-exclusive modes (e.g. Compare Mode) in sync.
+    if (STATE.hooks && STATE.hooks.onEditModeChange) {
+      STATE.hooks.onEditModeChange(STATE.translationMode);
+    }
+  }
+
+  function getOrCreateState(locale) {
+    if (!locale) return null;
+    if (!STATE.states.has(locale)) {
+      STATE.states.set(locale, TranslationState.createState(locale));
+    }
+    return STATE.states.get(locale);
+  }
+
+  function isSourceLocale(locale) {
+    return locale === 'zh-TW' || locale === 'en-US' || locale === 'unknown';
+  }
+
+  // ----- Upload -----
+
+  async function onUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale) { alert(t('tr.alert.pickLocale')); return; }
+    if (isSourceLocale(activeLocale)) {
+      alert(t('tr.alert.sourceLocale', { locale: activeLocale }));
+      return;
     }
 
-    function getOrCreateState(locale) {
-        if (!locale) return null;
-        if (!STATE.states.has(locale)) {
-            STATE.states.set(locale, TranslationState.createState(locale));
-        }
-        return STATE.states.get(locale);
+    const ts = getOrCreateState(activeLocale);
+    const before = ts.stats();
+    if (before.baselineCount > 0 || before.overrideCount > 0) {
+      const overrideWarn = before.overrideCount > 0
+        ? t('tr.confirm.replaceOverrideWarn', { o: before.overrideCount, locale: activeLocale })
+        : '';
+      const msg = t('tr.confirm.replace', {
+        locale: activeLocale,
+        b: before.baselineCount,
+        o: before.overrideCount,
+      }) + overrideWarn;
+      if (!confirm(msg)) return;
     }
 
-    function isSourceLocale(locale) {
-        return locale === 'zh-TW' || locale === 'en-US' || locale === 'unknown';
+    let parsed;
+    try {
+      parsed = await LocParser.parseFile(file, activeLocale);
+    } catch (err) {
+      alert(t('tr.alert.parseFailed', { msg: err.message }));
+      return;
     }
 
-    // ----- Upload -----
-
-    async function onUpload(e) {
-        const file = e.target.files && e.target.files[0];
-        e.target.value = '';
-        if (!file) return;
-
-        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-        if (!activeLocale) { alert(t('tr.alert.pickLocale')); return; }
-        if (isSourceLocale(activeLocale)) {
-            alert(t('tr.alert.sourceLocale', { locale: activeLocale }));
-            return;
-        }
-
-        const ts = getOrCreateState(activeLocale);
-        const before = ts.stats();
-        if (before.baselineCount > 0 || before.overrideCount > 0) {
-            const overrideWarn = before.overrideCount > 0
-                ? t('tr.confirm.replaceOverrideWarn', { o: before.overrideCount, locale: activeLocale })
-                : '';
-            const msg = t('tr.confirm.replace', {
-                locale: activeLocale,
-                b: before.baselineCount,
-                o: before.overrideCount,
-            }) + overrideWarn;
-            if (!confirm(msg)) return;
-        }
-
-        let parsed;
-        try {
-            parsed = await LocParser.parseFile(file, activeLocale);
-        } catch (err) {
-            alert(t('tr.alert.parseFailed', { msg: err.message }));
-            return;
-        }
-
-        if (parsed.stats.locale && parsed.stats.locale !== activeLocale) {
-            const proceed = confirm(t('tr.confirm.localeMismatch', {
-                got:  parsed.stats.locale,
-                want: activeLocale,
-            }));
-            if (!proceed) return;
-        }
-
-        // Persist baseline FIRST. If localStorage is exhausted (quota), we
-        // need to know before touching anything else — refusing the import
-        // is safer than half-saving and surprising the translator with a
-        // post-refresh rollback.
-        const persistResult = ts.replaceBaseline(parsed.translations, {
-            fileName: parsed.stats.sourceFile,
-            importedAt: new Date().toISOString(),
-            totalRows: parsed.stats.totalRows,
-            withTranslation: parsed.stats.withTranslation,
-        }, { source: parsed.source });
-
-        if (persistResult !== 'ok') {
-            // Persist refused (browser localStorage is full from other apps,
-            // or this locale's translation map alone exceeds the quota).
-            // baseline lives only in memory — refresh will lose it. Don't
-            // touch notes either; we don't want notes outliving the
-            // translations they belonged to across a refresh.
-            alert(t('tr.alert.persistFailed', {
-                locale: activeLocale,
-                file: parsed.stats.sourceFile,
-            }));
-            try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
-            try { if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw(); }
-            catch (e) { console.error('[requestRedraw]', e); }
-            return;
-        }
-
-        // Notes restore happens only after baseline is durably persisted —
-        // avoids the "notes saved but translations vanished on refresh" bug.
-        let notesRestored = 0;
-        try {
-            notesRestored = restoreNotesFromSource(parsed.source);
-        } catch (e) {
-            console.error('[translation-ui] note restore failed:', e);
-        }
-
-        if (STATE.hooks && STATE.hooks.markExported) STATE.hooks.markExported();
-
-        if (parsed.warnings.length) {
-            console.warn('[translation-ui] upload warnings:', parsed.warnings);
-        }
-        const head = parsed.warnings.slice(0, 5).join('\n  ');
-        const more = parsed.warnings.length > 5
-            ? t('tr.alert.warningsMore', { n: parsed.warnings.length - 5 })
-            : '';
-        const warningSummary = parsed.warnings.length
-            ? t('tr.alert.warnings', { head }) + more
-            : '';
-        const notesLine = notesRestored
-            ? t('tr.alert.notesRestored', { n: notesRestored })
-            : '';
-        alert(t('tr.alert.loaded', {
-            locale: activeLocale,
-            file: parsed.stats.sourceFile,
-            total: parsed.stats.totalRows,
-            translated: parsed.stats.withTranslation,
-            missing: parsed.stats.missingUid,
-        }) + notesLine + warningSummary);
-
-        // Both display-refresh paths are isolated — a thrown updateStats
-        // (e.g. en-US not loaded for the active script yet) must not block
-        // the transcript from picking up the new translations.
-        try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
-        try { if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw(); }
-        catch (e) { console.error('[requestRedraw]', e); }
+    if (parsed.stats.locale && parsed.stats.locale !== activeLocale) {
+      const proceed = confirm(t('tr.confirm.localeMismatch', {
+        got:  parsed.stats.locale,
+        want: activeLocale,
+      }));
+      if (!proceed) return;
     }
 
-    // ----- Reset -----
+    // Persist baseline FIRST. If localStorage is exhausted (quota), we
+    // need to know before touching anything else — refusing the import
+    // is safer than half-saving and surprising the translator with a
+    // post-refresh rollback.
+    const persistResult = ts.replaceBaseline(parsed.translations, {
+      fileName: parsed.stats.sourceFile,
+      importedAt: new Date().toISOString(),
+      totalRows: parsed.stats.totalRows,
+      withTranslation: parsed.stats.withTranslation,
+    }, { source: parsed.source });
 
-    function onResetLocale() {
-        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-        if (!activeLocale) { alert(t('tr.alert.pickLocale')); return; }
-        if (isSourceLocale(activeLocale)) {
-            alert(t('tr.alert.sourceLocale', { locale: activeLocale }));
-            return;
-        }
-        const ts = getOrCreateState(activeLocale);
-        const s = ts ? ts.stats() : { baselineCount: 0, overrideCount: 0 };
-        if (s.baselineCount === 0 && s.overrideCount === 0) {
-            alert(t('tr.alert.resetEmpty', { locale: activeLocale }));
-            return;
-        }
-        const proceed = confirm(t('tr.confirm.reset', {
-            locale: activeLocale,
-            b: s.baselineCount,
-            o: s.overrideCount,
+    if (persistResult !== 'ok') {
+      // Persist refused (browser localStorage is full from other apps,
+      // or this locale's translation map alone exceeds the quota).
+      // baseline lives only in memory — refresh will lose it. Don't
+      // touch notes either; we don't want notes outliving the
+      // translations they belonged to across a refresh.
+      alert(t('tr.alert.persistFailed', {
+        locale: activeLocale,
+        file: parsed.stats.sourceFile,
+      }));
+      try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
+      try { if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw(); }
+      catch (e) { console.error('[requestRedraw]', e); }
+      return;
+    }
+
+    // Notes restore happens only after baseline is durably persisted —
+    // avoids the "notes saved but translations vanished on refresh" bug.
+    let notesRestored = 0;
+    try {
+      notesRestored = restoreNotesFromSource(parsed.source);
+    } catch (e) {
+      console.error('[translation-ui] note restore failed:', e);
+    }
+
+    if (STATE.hooks && STATE.hooks.markExported) STATE.hooks.markExported();
+
+    if (parsed.warnings.length) {
+      console.warn('[translation-ui] upload warnings:', parsed.warnings);
+    }
+    const head = parsed.warnings.slice(0, 5).join('\n  ');
+    const more = parsed.warnings.length > 5
+      ? t('tr.alert.warningsMore', { n: parsed.warnings.length - 5 })
+      : '';
+    const warningSummary = parsed.warnings.length
+      ? t('tr.alert.warnings', { head }) + more
+      : '';
+    const notesLine = notesRestored
+      ? t('tr.alert.notesRestored', { n: notesRestored })
+      : '';
+    alert(t('tr.alert.loaded', {
+      locale: activeLocale,
+      file: parsed.stats.sourceFile,
+      total: parsed.stats.totalRows,
+      translated: parsed.stats.withTranslation,
+      missing: parsed.stats.missingUid,
+    }) + notesLine + warningSummary);
+
+    // Both display-refresh paths are isolated — a thrown updateStats
+    // (e.g. en-US not loaded for the active script yet) must not block
+    // the transcript from picking up the new translations.
+    try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
+    try { if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw(); }
+    catch (e) { console.error('[requestRedraw]', e); }
+  }
+
+  // ----- Reset -----
+
+  function onResetLocale() {
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale) { alert(t('tr.alert.pickLocale')); return; }
+    if (isSourceLocale(activeLocale)) {
+      alert(t('tr.alert.sourceLocale', { locale: activeLocale }));
+      return;
+    }
+    const ts = getOrCreateState(activeLocale);
+    const s = ts ? ts.stats() : { baselineCount: 0, overrideCount: 0 };
+    if (s.baselineCount === 0 && s.overrideCount === 0) {
+      alert(t('tr.alert.resetEmpty', { locale: activeLocale }));
+      return;
+    }
+    const proceed = confirm(t('tr.confirm.reset', {
+      locale: activeLocale,
+      b: s.baselineCount,
+      o: s.overrideCount,
+    }));
+    if (!proceed) return;
+    if (ts) ts.reset();
+    updateStats();
+    if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+  }
+
+  // ----- Export-state indicator -----
+
+  function formatAgo(ms) {
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return t('tr.export.ago.lt1m');
+    if (m < 60) return t('tr.export.ago.minutes', { n: m });
+    const h = Math.floor(m / 60);
+    if (h < 24) return t('tr.export.ago.hours', { n: h });
+    return t('tr.export.ago.days', { n: Math.floor(h / 24) });
+  }
+
+  function formatExportDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${y}/${mo}/${da}`;
+  }
+
+  function refreshExportStatus() {
+    const el = document.getElementById('t-export-status');
+    if (!el) return;
+    if (!STATE.hooks || !STATE.hooks.getExportState) {
+      el.textContent = '';
+      el.className = 't-export-status';
+      return;
+    }
+    const s = STATE.hooks.getExportState() || {};
+    if (!s.lastEditAt) {
+      // Never edited anything → don't show indicator at all.
+      el.textContent = '';
+      el.className = 't-export-status';
+      return;
+    }
+    const dirty = !s.lastExportAt
+      || new Date(s.lastEditAt).getTime() > new Date(s.lastExportAt).getTime();
+    if (dirty) {
+      el.className = 't-export-status dirty';
+      el.textContent = s.lastExportAt
+        ? t('tr.export.dirty', {
+          date: formatExportDate(s.lastExportAt),
+          ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()),
+         })
+        : t('tr.export.dirtyNever');
+    } else {
+      el.className = 't-export-status clean';
+      el.textContent = t('tr.export.clean', {
+        date: formatExportDate(s.lastExportAt),
+        ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()),
+      });
+    }
+  }
+
+  // Refresh "X minutes ago" copy on a slow timer.
+  setInterval(() => {
+    try { refreshExportStatus(); } catch (e) {}
+  }, 30 * 1000);
+
+  // ----- Stats display -----
+
+  function updateStats() {
+    const el = document.getElementById('t-stats');
+    if (!el) return;
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    const projUids = STATE.hooks && STATE.hooks.getActiveProjectUids
+      ? STATE.hooks.getActiveProjectUids() : null;
+    const total = projUids ? projUids.size : 0;
+
+    // Reset progress before any early return so a stale bar doesn't linger
+    // when we switch into "no locale" / "not loaded" states.
+    const noStats = !activeLocale || !total;
+    if (noStats) updateProgress(0, 0);
+
+    if (!activeLocale) {
+      el.textContent = t('tr.stats.noLocale');
+      el.classList.remove('has-untranslated');
+      return;
+    }
+    const ts = getOrCreateState(activeLocale);
+    const s = ts ? ts.stats() : null;
+    const isSrc = isSourceLocale(activeLocale);
+
+    let done = 0;
+    if (ts && total) {
+      const merged = ts.buildMergedMap();
+      for (const uid of projUids) {
+        const v = merged.get(uid);
+        if (v != null && v !== '') done++;
+      }
+    }
+    // Source locales (en-US / zh-TW) are authored, not translated — they
+    // are always 100% by definition. Suppress the warn-state highlight.
+    if (isSrc && total) done = total;
+
+    el.innerHTML = '';
+    if (total) {
+      const main = document.createElement('span');
+      main.textContent = t('tr.stats.progress', { done, total });
+      el.appendChild(main);
+      updateProgress(done, total);
+      el.classList.toggle('has-untranslated', !isSrc && done < total);
+    } else if (s && (s.baselineCount || s.overrideCount)) {
+      // No project UIDs available yet (e.g. en-US data still loading)
+      // but we do have a state. Fall back to the legacy summary so the
+      // user still sees something meaningful.
+      const main = document.createElement('span');
+      main.textContent = t('tr.stats.loaded', {
+        locale: activeLocale, b: s.baselineCount, o: s.overrideCount,
+      });
+      el.appendChild(main);
+      el.classList.remove('has-untranslated');
+    } else {
+      el.textContent = t('tr.stats.notLoaded', { locale: activeLocale });
+      el.classList.remove('has-untranslated');
+    }
+
+    if (s && s.sourceMeta && s.sourceMeta.fileName) {
+      const file = document.createElement('span');
+      file.style.opacity = '0.6';
+      file.textContent = t('tr.stats.loadedFile', { file: s.sourceMeta.fileName });
+      el.appendChild(file);
+    }
+  }
+
+  function updateProgress(done, total) {
+    const wrap   = document.getElementById('t-progress');
+    const dEl    = document.getElementById('t-prog-done');
+    const tEl    = document.getElementById('t-prog-total');
+    const fillEl = document.getElementById('t-prog-fill');
+    const pctEl  = document.getElementById('t-prog-pct');
+    if (!wrap) return;
+    if (!total) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    if (dEl) dEl.textContent = String(done);
+    if (tEl) tEl.textContent = String(total);
+    const pct = Math.round((done / total) * 100);
+    if (fillEl) fillEl.style.width = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '%';
+  }
+
+  // ----- Translation lookup（給 transcript 渲染用） -----
+
+  // 上傳的譯文 + 站內編輯永遠都覆蓋顯示（跟 Edit Mode 無關）。
+  // Edit Mode 只控制 ✏️ 按鈕 + 視覺裝飾（dim/border）。
+  function lookupLine(uid, originalText) {
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale) return { text: originalText, status: 'inactive', uid };
+    if (isSourceLocale(activeLocale)) return { text: originalText, status: 'inactive', uid };
+    const ts = getOrCreateState(activeLocale);
+    if (!ts) return { text: originalText, status: 'untranslated', uid };
+    const text = ts.get(uid);
+    if (text == null || text === '') {
+      return { text: originalText, status: 'untranslated', uid };
+    }
+    return { text, status: ts.source(uid), uid };
+  }
+
+  function decorateLine(rowEl, info, originalText) {
+    if (!info || !info.uid) return;
+    rowEl.dataset.tUid = info.uid;
+    rowEl.dataset.tOriginal = originalText;
+    // Edit Mode 才顯示視覺裝飾與 ✏️ 編輯按鈕；非 Edit Mode 只悄悄帶 data 屬性
+    if (!STATE.translationMode) return;
+    rowEl.classList.add('t-line');
+    if (info.status === 'untranslated') rowEl.classList.add('t-untranslated');
+    else if (info.status === 'override') rowEl.classList.add('t-overridden');
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 't-edit-btn';
+    editBtn.type = 'button';
+    editBtn.textContent = '✏️';
+    editBtn.dataset.i18nTitle = 'tr.editBtn.tip';
+    editBtn.title = t('tr.editBtn.tip');
+    editBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      // 預填當前畫面顯示的文本（已翻就是譯文，沒翻就是英文）
+      openInlineEditor(rowEl, info.uid, info.text);
+    });
+    rowEl.appendChild(editBtn);
+  }
+
+  function openInlineEditor(rowEl, uid, currentText) {
+    if (rowEl.querySelector('.t-inline-editor')) return;
+
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale) return;
+    const ts = getOrCreateState(activeLocale);
+
+    const editor = document.createElement('div');
+    editor.className = 't-inline-editor';
+    // 阻止編輯器內任何點擊冒泡到 transcript 觸發 advance
+    editor.addEventListener('click', (ev) => ev.stopPropagation());
+    editor.addEventListener('mousedown', (ev) => ev.stopPropagation());
+
+    const ta = document.createElement('textarea');
+    ta.value = currentText || '';
+    ta.rows = Math.min(6, Math.max(1, (currentText || '').split('\n').length));
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'confirm';
+    ok.dataset.i18n = 'tr.editConfirm';
+    ok.textContent = '✓';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'cancel';
+    cancel.dataset.i18n = 'tr.editCancel';
+    cancel.textContent = '✗';
+    actions.appendChild(ok);
+    actions.appendChild(cancel);
+
+    editor.appendChild(ta);
+    editor.appendChild(actions);
+    rowEl.appendChild(editor);
+    refreshI18n();
+    ta.focus();
+    ta.select();
+
+    const close = () => editor.remove();
+    cancel.addEventListener('click', close);
+    ok.addEventListener('click', () => {
+      const newText = ta.value;
+      const persistResult = ts.setOverride(uid, newText);
+      if (persistResult !== 'ok') {
+        alert(t('tr.alert.persistFailed', {
+          locale: STATE.hooks.getActiveLocale(), file: '(inline edit)',
         }));
-        if (!proceed) return;
-        if (ts) ts.reset();
-        updateStats();
-        if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+      }
+      try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
+      if (STATE.hooks && STATE.hooks.markEditDirty) STATE.hooks.markEditDirty();
+      close();
+      if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+    });
+    ta.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); close(); }
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); ok.click(); }
+    });
+  }
+
+  // ----- Download (CSV/xlsx in same format as upload) -----
+
+  function onDownloadLocFile() {
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale) { alert(t('tr.alert.pickLocale')); return; }
+    if (isSourceLocale(activeLocale)) {
+      alert(t('tr.alert.sourceLocaleDownload', { locale: activeLocale }));
+      return;
     }
-
-    // ----- Export-state indicator -----
-
-    function formatAgo(ms) {
-        const m = Math.floor(ms / 60000);
-        if (m < 1) return t('tr.export.ago.lt1m');
-        if (m < 60) return t('tr.export.ago.minutes', { n: m });
-        const h = Math.floor(m / 60);
-        if (h < 24) return t('tr.export.ago.hours', { n: h });
-        return t('tr.export.ago.days', { n: Math.floor(h / 24) });
+    if (typeof LocWriter === 'undefined') {
+      console.error('LocWriter missing');
+      return;
     }
-
-    function formatExportDate(iso) {
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return '';
-        const y = d.getFullYear();
-        const mo = String(d.getMonth() + 1).padStart(2, '0');
-        const da = String(d.getDate()).padStart(2, '0');
-        return `${y}/${mo}/${da}`;
+    // getOrCreateState (not raw .get) so a fresh page load that hasn't yet
+    // touched this locale still pulls the persisted overrides + source out
+    // of localStorage. Without this the export would silently produce a
+    // CSV with empty translation columns.
+    const ts = getOrCreateState(activeLocale);
+    // If the user uploaded a file we keep their original format byte-for-byte.
+    // Otherwise (inline-edits-only) we synthesize a CSV from the en-US project
+    // AST so they can still download their progress.
+    let source = ts ? ts.getSource() : null;
+    if (source) {
+      // Add FileName / NodeTitle / Notes columns so translator notes
+      // travel with the export. No-op when the source already has them
+      // and notes are empty.
+      source = augmentSourceForExport(source);
+    } else {
+      source = buildSyntheticSource(activeLocale);
+      if (!source) { alert(t('tr.alert.noBaseline')); return; }
     }
-
-    function refreshExportStatus() {
-        const el = document.getElementById('t-export-status');
-        if (!el) return;
-        if (!STATE.hooks || !STATE.hooks.getExportState) {
-            el.textContent = '';
-            el.className = 't-export-status';
-            return;
-        }
-        const s = STATE.hooks.getExportState() || {};
-        if (!s.lastEditAt) {
-            // Never edited anything → don't show indicator at all.
-            el.textContent = '';
-            el.className = 't-export-status';
-            return;
-        }
-        const dirty = !s.lastExportAt
-            || new Date(s.lastEditAt).getTime() > new Date(s.lastExportAt).getTime();
-        if (dirty) {
-            el.className = 't-export-status dirty';
-            el.textContent = s.lastExportAt
-                ? t('tr.export.dirty', {
-                    date: formatExportDate(s.lastExportAt),
-                    ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()),
-                  })
-                : t('tr.export.dirtyNever');
-        } else {
-            el.className = 't-export-status clean';
-            el.textContent = t('tr.export.clean', {
-                date: formatExportDate(s.lastExportAt),
-                ago: formatAgo(Date.now() - new Date(s.lastExportAt).getTime()),
-            });
-        }
+    try {
+      const merged = ts ? ts.buildMergedMap() : new Map();
+      const result = LocWriter.writeLocFile(source, merged, {});
+      const blob = result.payload instanceof Blob
+        ? result.payload
+        : new Blob([result.payload], { type: result.mime });
+      downloadBlob(blob, result.filename);
+      if (STATE.hooks && STATE.hooks.markExported) STATE.hooks.markExported();
+    } catch (e) {
+      console.error('[translation-ui] download loc failed:', e);
+      alert(t('tr.alert.downloadFailed', { msg: e.message }));
     }
+  }
 
-    // Refresh "X minutes ago" copy on a slow timer.
-    setInterval(() => {
-        try { refreshExportStatus(); } catch (e) {}
-    }, 30 * 1000);
+  // Build the v2 LocKit-style CSV (Type, Gender, CharacterName, en-US,
+  // {locale}, ID, FileName, NodeTitle, Notes) by re-running
+  // YarnConverter.buildSO on every loaded en-US project — same code path
+  // Unity v2 uses, so the file is import-ready. The trailing FileName /
+  // NodeTitle / Notes columns let translator notes round-trip across
+  // browsers and machines (Unity's parser locates columns by header name
+  // and ignores unknown extras).
+  function buildSyntheticSource(targetLocale) {
+    if (!STATE.hooks || !STATE.hooks.getAllGroups || !STATE.hooks.getEntry) return null;
+    if (!STATE.guids) return null;
+    if (typeof YarnConverter === 'undefined') return null;
 
-    // ----- Stats display -----
-
-    function updateStats() {
-        const el = document.getElementById('t-stats');
-        if (!el) return;
-        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-        const projUids = STATE.hooks && STATE.hooks.getActiveProjectUids
-            ? STATE.hooks.getActiveProjectUids() : null;
-        const total = projUids ? projUids.size : 0;
-
-        // Reset progress before any early return so a stale bar doesn't linger
-        // when we switch into "no locale" / "not loaded" states.
-        const noStats = !activeLocale || !total;
-        if (noStats) updateProgress(0, 0);
-
-        if (!activeLocale) {
-            el.textContent = t('tr.stats.noLocale');
-            el.classList.remove('has-untranslated');
-            return;
-        }
-        const ts = getOrCreateState(activeLocale);
-        const s = ts ? ts.stats() : null;
-        const isSrc = isSourceLocale(activeLocale);
-
-        let done = 0;
-        if (ts && total) {
-            const merged = ts.buildMergedMap();
-            for (const uid of projUids) {
-                const v = merged.get(uid);
-                if (v != null && v !== '') done++;
-            }
-        }
-        // Source locales (en-US / zh-TW) are authored, not translated — they
-        // are always 100% by definition. Suppress the warn-state highlight.
-        if (isSrc && total) done = total;
-
-        el.innerHTML = '';
-        if (total) {
-            const main = document.createElement('span');
-            main.textContent = t('tr.stats.progress', { done, total });
-            el.appendChild(main);
-            updateProgress(done, total);
-            el.classList.toggle('has-untranslated', !isSrc && done < total);
-        } else if (s && (s.baselineCount || s.overrideCount)) {
-            // No project UIDs available yet (e.g. en-US data still loading)
-            // but we do have a state. Fall back to the legacy summary so the
-            // user still sees something meaningful.
-            const main = document.createElement('span');
-            main.textContent = t('tr.stats.loaded', {
-                locale: activeLocale, b: s.baselineCount, o: s.overrideCount,
-            });
-            el.appendChild(main);
-            el.classList.remove('has-untranslated');
-        } else {
-            el.textContent = t('tr.stats.notLoaded', { locale: activeLocale });
-            el.classList.remove('has-untranslated');
-        }
-
-        if (s && s.sourceMeta && s.sourceMeta.fileName) {
-            const file = document.createElement('span');
-            file.style.opacity = '0.6';
-            file.textContent = t('tr.stats.loadedFile', { file: s.sourceMeta.fileName });
-            el.appendChild(file);
-        }
-    }
-
-    function updateProgress(done, total) {
-        const wrap   = document.getElementById('t-progress');
-        const dEl    = document.getElementById('t-prog-done');
-        const tEl    = document.getElementById('t-prog-total');
-        const fillEl = document.getElementById('t-prog-fill');
-        const pctEl  = document.getElementById('t-prog-pct');
-        if (!wrap) return;
-        if (!total) { wrap.hidden = true; return; }
-        wrap.hidden = false;
-        if (dEl) dEl.textContent = String(done);
-        if (tEl) tEl.textContent = String(total);
-        const pct = Math.round((done / total) * 100);
-        if (fillEl) fillEl.style.width = pct + '%';
-        if (pctEl) pctEl.textContent = pct + '%';
-    }
-
-    // ----- Translation lookup（給 transcript 渲染用） -----
-
-    // 上傳的譯文 + 站內編輯永遠都覆蓋顯示（跟 Edit Mode 無關）。
-    // Edit Mode 只控制 ✏️ 按鈕 + 視覺裝飾（dim/border）。
-    function lookupLine(uid, originalText) {
-        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-        if (!activeLocale) return { text: originalText, status: 'inactive', uid };
-        if (isSourceLocale(activeLocale)) return { text: originalText, status: 'inactive', uid };
-        const ts = getOrCreateState(activeLocale);
-        if (!ts) return { text: originalText, status: 'untranslated', uid };
-        const text = ts.get(uid);
-        if (text == null || text === '') {
-            return { text: originalText, status: 'untranslated', uid };
-        }
-        return { text, status: ts.source(uid), uid };
-    }
-
-    function decorateLine(rowEl, info, originalText) {
-        if (!info || !info.uid) return;
-        rowEl.dataset.tUid = info.uid;
-        rowEl.dataset.tOriginal = originalText;
-        // Edit Mode 才顯示視覺裝飾與 ✏️ 編輯按鈕；非 Edit Mode 只悄悄帶 data 屬性
-        if (!STATE.translationMode) return;
-        rowEl.classList.add('t-line');
-        if (info.status === 'untranslated') rowEl.classList.add('t-untranslated');
-        else if (info.status === 'override') rowEl.classList.add('t-overridden');
-
-        const editBtn = document.createElement('button');
-        editBtn.className = 't-edit-btn';
-        editBtn.type = 'button';
-        editBtn.textContent = '✏️';
-        editBtn.dataset.i18nTitle = 'tr.editBtn.tip';
-        editBtn.title = t('tr.editBtn.tip');
-        editBtn.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            // 預填當前畫面顯示的文本（已翻就是譯文，沒翻就是英文）
-            openInlineEditor(rowEl, info.uid, info.text);
-        });
-        rowEl.appendChild(editBtn);
-    }
-
-    function openInlineEditor(rowEl, uid, currentText) {
-        if (rowEl.querySelector('.t-inline-editor')) return;
-
-        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-        if (!activeLocale) return;
-        const ts = getOrCreateState(activeLocale);
-
-        const editor = document.createElement('div');
-        editor.className = 't-inline-editor';
-        // 阻止編輯器內任何點擊冒泡到 transcript 觸發 advance
-        editor.addEventListener('click', (ev) => ev.stopPropagation());
-        editor.addEventListener('mousedown', (ev) => ev.stopPropagation());
-
-        const ta = document.createElement('textarea');
-        ta.value = currentText || '';
-        ta.rows = Math.min(6, Math.max(1, (currentText || '').split('\n').length));
-
-        const actions = document.createElement('div');
-        actions.className = 'actions';
-        const ok = document.createElement('button');
-        ok.type = 'button';
-        ok.className = 'confirm';
-        ok.dataset.i18n = 'tr.editConfirm';
-        ok.textContent = '✓';
-        const cancel = document.createElement('button');
-        cancel.type = 'button';
-        cancel.className = 'cancel';
-        cancel.dataset.i18n = 'tr.editCancel';
-        cancel.textContent = '✗';
-        actions.appendChild(ok);
-        actions.appendChild(cancel);
-
-        editor.appendChild(ta);
-        editor.appendChild(actions);
-        rowEl.appendChild(editor);
-        refreshI18n();
-        ta.focus();
-        ta.select();
-
-        const close = () => editor.remove();
-        cancel.addEventListener('click', close);
-        ok.addEventListener('click', () => {
-            const newText = ta.value;
-            const persistResult = ts.setOverride(uid, newText);
-            if (persistResult !== 'ok') {
-                alert(t('tr.alert.persistFailed', {
-                    locale: STATE.hooks.getActiveLocale(), file: '(inline edit)',
-                }));
-            }
-            try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
-            if (STATE.hooks && STATE.hooks.markEditDirty) STATE.hooks.markEditDirty();
-            close();
-            if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
-        });
-        ta.addEventListener('keydown', (ev) => {
-            if (ev.key === 'Escape') { ev.preventDefault(); close(); }
-            if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); ok.click(); }
-        });
-    }
-
-    // ----- Download (CSV/xlsx in same format as upload) -----
-
-    function onDownloadLocFile() {
-        const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-        if (!activeLocale) { alert(t('tr.alert.pickLocale')); return; }
-        if (isSourceLocale(activeLocale)) {
-            alert(t('tr.alert.sourceLocaleDownload', { locale: activeLocale }));
-            return;
-        }
-        if (typeof LocWriter === 'undefined') {
-            console.error('LocWriter missing');
-            return;
-        }
-        // getOrCreateState (not raw .get) so a fresh page load that hasn't yet
-        // touched this locale still pulls the persisted overrides + source out
-        // of localStorage. Without this the export would silently produce a
-        // CSV with empty translation columns.
-        const ts = getOrCreateState(activeLocale);
-        // If the user uploaded a file we keep their original format byte-for-byte.
-        // Otherwise (inline-edits-only) we synthesize a CSV from the en-US project
-        // AST so they can still download their progress.
-        let source = ts ? ts.getSource() : null;
-        if (source) {
-            // Add FileName / NodeTitle / Notes columns so translator notes
-            // travel with the export. No-op when the source already has them
-            // and notes are empty.
-            source = augmentSourceForExport(source);
-        } else {
-            source = buildSyntheticSource(activeLocale);
-            if (!source) { alert(t('tr.alert.noBaseline')); return; }
-        }
-        try {
-            const merged = ts ? ts.buildMergedMap() : new Map();
-            const result = LocWriter.writeLocFile(source, merged, {});
-            const blob = result.payload instanceof Blob
-                ? result.payload
-                : new Blob([result.payload], { type: result.mime });
-            downloadBlob(blob, result.filename);
-            if (STATE.hooks && STATE.hooks.markExported) STATE.hooks.markExported();
-        } catch (e) {
-            console.error('[translation-ui] download loc failed:', e);
-            alert(t('tr.alert.downloadFailed', { msg: e.message }));
-        }
-    }
-
-    // Build the v2 LocKit-style CSV (Type, Gender, CharacterName, en-US,
-    // {locale}, ID, FileName, NodeTitle, Notes) by re-running
-    // YarnConverter.buildSO on every loaded en-US project — same code path
-    // Unity v2 uses, so the file is import-ready. The trailing FileName /
-    // NodeTitle / Notes columns let translator notes round-trip across
-    // browsers and machines (Unity's parser locates columns by header name
-    // and ignores unknown extras).
-    function buildSyntheticSource(targetLocale) {
-        if (!STATE.hooks || !STATE.hooks.getAllGroups || !STATE.hooks.getEntry) return null;
-        if (!STATE.guids) return null;
-        if (typeof YarnConverter === 'undefined') return null;
-
-        const headers = ['Type', 'Gender', 'CharacterName', 'en-US', targetLocale, 'ID', 'FileName', 'NodeTitle', 'Notes'];
-        const rows = [];
-        const charCtx = {
-            characterKeys: STATE.characterKeys || {},
-            characterTranslations: STATE.characterTranslations || {},
-            locale: 'en-US',
-        };
-        const genderMap = STATE.speakerGender || {};
-        const getNote = STATE.hooks.getNote || (() => '');
-
-        for (const group of STATE.hooks.getAllGroups()) {
-            const enEntry = STATE.hooks.getEntry(group, 'en-US');
-            if (!enEntry || !enEntry.project) continue;
-            const guid = STATE.guids[enEntry.filename];
-            if (!guid) continue;
-            const rawNodes = enEntry.project.rawNodes || [];
-            let so;
-            try {
-                so = YarnConverter.buildSO(rawNodes, guid, charCtx);
-            } catch (e) {
-                console.warn('[translation-ui] buildSO failed for', enEntry.filename, e);
-                continue;
-            }
-            for (const node of so) {
-                const noteText = getNote(group, node.title) || '';
-                let firstRow = true;
-                for (const line of node.textLines) {
-                    if (line.category !== 'Dialogue' && line.category !== 'Option') continue;
-                    if (!line.dialogue) continue;
-                    rows.push([
-                        line.category,
-                        genderMap[line.characterName] || '',
-                        line.characterName || '',
-                        line.dialogue,
-                        '',
-                        line.uid,
-                        enEntry.filename,
-                        node.title,
-                        firstRow ? noteText : '',
-                    ]);
-                    firstRow = false;
-                }
-            }
-        }
-
-        if (rows.length === 0) return null;
-        return {
-            format: 'csv',
-            fileName: `${targetLocale}_translations.csv`,
-            headers,
-            rows,
-            idCol: 5,
-            localeCol: 4,
-            csvHasBom: true,
-        };
-    }
-
-    // Augment an uploaded source structure (whatever shape the user gave us)
-    // with FileName / NodeTitle / Notes columns so notes round-trip even when
-    // the original file didn't carry them. No-op when the original already
-    // has every column we'd add.
-    function augmentSourceForExport(source) {
-        if (!source || !STATE.hooks || !STATE.hooks.getNote) return source;
-        const out = {
-            format:    source.format,
-            fileName:  source.fileName,
-            headers:   source.headers.slice(),
-            rows:      source.rows.map(r => r.slice()),
-            idCol:     source.idCol,
-            localeCol: source.localeCol,
-            csvHasBom: source.csvHasBom,
-        };
-
-        const headerIdx = (name) => {
-            const target = name.toLowerCase();
-            for (let i = 0; i < out.headers.length; i++) {
-                if (String(out.headers[i] || '').toLowerCase() === target) return i;
-            }
-            return -1;
-        };
-
-        const ensureCol = (name) => {
-            let idx = headerIdx(name);
-            if (idx !== -1) return idx;
-            idx = out.headers.length;
-            out.headers.push(name);
-            out.rows.forEach(r => r.push(''));
-            return idx;
-        };
-
-        // Need NodeTitle to know which row maps to which node; derive from UID
-        // when the user's source didn't include the column.
-        const fileCol  = ensureCol('FileName');
-        const nodeCol  = ensureCol('NodeTitle');
-        const notesCol = ensureCol('Notes');
-
-        // Reverse map: guid → {filename, group, project}
-        const guidLookup = {};
-        if (STATE.guids && STATE.hooks.getAllGroups && STATE.hooks.getEntry) {
-            for (const group of STATE.hooks.getAllGroups()) {
-                const en = STATE.hooks.getEntry(group, 'en-US');
-                if (!en) continue;
-                const g = STATE.guids[en.filename];
-                if (g) guidLookup[g] = { filename: en.filename, group, project: en.project };
-            }
-        }
-
-        // First pass: ensure every row has FileName + NodeTitle if we can derive them.
-        const seenNodeFirstRow = new Map(); // group||title → rowIdx of first row for that node
-        for (let i = 0; i < out.rows.length; i++) {
-            const row = out.rows[i];
-            const uid = (row[out.idCol] || '').toString().trim();
-            const m = uid.match(/^(.+)-(\d+)-\d+$/);
-            if (!m) continue;
-            const meta = guidLookup[m[1]];
-            if (!meta) continue;
-            const nodeIndex = parseInt(m[2], 10);
-            const nodeTitle = meta.project?.rawNodes?.[nodeIndex]?.title;
-            if (!nodeTitle) continue;
-            if (!row[fileCol]) row[fileCol] = meta.filename;
-            if (!row[nodeCol]) row[nodeCol] = nodeTitle;
-            const key = meta.group + '\x00' + nodeTitle;
-            if (!seenNodeFirstRow.has(key)) {
-                seenNodeFirstRow.set(key, { rowIdx: i, group: meta.group, title: nodeTitle });
-            }
-        }
-
-        // Second pass: drop the note onto the first row of each node (only if
-        // the cell isn't already populated by the user).
-        for (const { rowIdx, group, title } of seenNodeFirstRow.values()) {
-            if (out.rows[rowIdx][notesCol]) continue;
-            const note = STATE.hooks.getNote(group, title) || '';
-            if (note) out.rows[rowIdx][notesCol] = note;
-        }
-
-        return out;
-    }
-
-    // Walk an imported source's rows looking for a Notes column; restore each
-    // non-empty cell into yp.notes via the host's setNote hook.
-    function restoreNotesFromSource(source) {
-        if (!source || !source.headers || !source.rows) return 0;
-        if (!STATE.hooks || !STATE.hooks.setNote) return 0;
-
-        const headerIdx = (name) => {
-            const target = name.toLowerCase();
-            for (let i = 0; i < source.headers.length; i++) {
-                if (String(source.headers[i] || '').toLowerCase() === target) return i;
-            }
-            return -1;
-        };
-        const notesCol = headerIdx('Notes');
-        if (notesCol === -1) return 0;
-        const fileCol = headerIdx('FileName');
-        const nodeCol = headerIdx('NodeTitle');
-
-        // For finding group when only FileName is available.
-        const filenameToGroup = {};
-        if (STATE.hooks.getAllGroups && STATE.hooks.getEntry) {
-            for (const group of STATE.hooks.getAllGroups()) {
-                const en = STATE.hooks.getEntry(group, 'en-US');
-                if (en) filenameToGroup[en.filename] = group;
-            }
-        }
-        const guidLookup = {};
-        if (STATE.guids) {
-            for (const [fn, g] of Object.entries(STATE.guids)) {
-                guidLookup[g] = { filename: fn, group: filenameToGroup[fn] };
-            }
-        }
-        const idCol = source.idCol;
-
-        let restored = 0;
-        for (const row of source.rows) {
-            const noteText = (row[notesCol] || '').toString();
-            if (!noteText) continue;
-
-            // Resolve (group, nodeTitle) for this row.
-            let group = null;
-            let nodeTitle = nodeCol !== -1 ? (row[nodeCol] || '').toString().trim() : '';
-            if (fileCol !== -1) {
-                const fn = (row[fileCol] || '').toString().trim();
-                if (fn && filenameToGroup[fn]) group = filenameToGroup[fn];
-            }
-            if ((!group || !nodeTitle) && idCol != null) {
-                const uid = (row[idCol] || '').toString().trim();
-                const m = uid.match(/^(.+)-(\d+)-\d+$/);
-                if (m) {
-                    const meta = guidLookup[m[1]];
-                    if (meta) {
-                        if (!group) group = meta.group;
-                        if (!nodeTitle && filenameToGroup[meta.filename]) {
-                            const en = STATE.hooks.getEntry(filenameToGroup[meta.filename], 'en-US');
-                            const idx = parseInt(m[2], 10);
-                            nodeTitle = en?.project?.rawNodes?.[idx]?.title || '';
-                        }
-                    }
-                }
-            }
-            if (!group || !nodeTitle) continue;
-            STATE.hooks.setNote(group, nodeTitle, noteText);
-            restored++;
-        }
-        return restored;
-    }
-
-    function downloadBlob(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }
-
-    // ----- 給 ui.js 算 UID -----
-
-    function getUidFor(filename, nodeIndex, srcLine) {
-        if (!STATE.guids || !filename) return null;
-        const guid = STATE.guids[filename];
-        if (!guid) return null;
-        return `${guid}-${nodeIndex}-${srcLine}`;
-    }
-
-    // Cross-locale lookup used by the translation-comparison modal in ui.js.
-    // Unlike lookupLine() — which only looks at the current activeLocale —
-    // this reaches into TranslationState[locale] for any locale, so the
-    // comparison reflects imported files + inline edits per language.
-    function lookupForLocale(locale, uid, fallbackText) {
-        if (!locale || !uid) return { text: fallbackText, status: 'inactive' };
-        if (isSourceLocale(locale)) return { text: fallbackText, status: 'inactive' };
-        const ts = STATE.states.get(locale) || (
-            typeof TranslationState !== 'undefined'
-                ? (() => {
-                    const fresh = TranslationState.createState(locale);
-                    STATE.states.set(locale, fresh);
-                    return fresh;
-                  })()
-                : null
-        );
-        if (!ts) return { text: fallbackText, status: 'untranslated' };
-        const text = ts.get(uid);
-        if (text == null || text === '') {
-            return { text: fallbackText, status: 'untranslated' };
-        }
-        return { text, status: ts.source(uid) };
-    }
-
-    // Used by Compare Mode (ui.js) to write edits back to a non-active locale.
-    // Mirrors the inline editor's flow: setOverride → markEditDirty → updateStats.
-    function setOverrideForLocale(locale, uid, text) {
-        if (!locale || !uid) return;
-        if (isSourceLocale(locale)) {
-            throw new Error(`Cannot edit source locale "${locale}"`);
-        }
-        const ts = getOrCreateState(locale);
-        if (!ts) return;
-        ts.setOverride(uid, text);
-        if (STATE.hooks && STATE.hooks.markEditDirty) STATE.hooks.markEditDirty();
-        // Stats reflect the *active* locale; only refresh if that's what we touched.
-        const active = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-        if (active === locale) {
-            updateStats();
-            if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
-        }
-    }
-
-    global.TranslationUI = {
-        install,
-        lookupLine,
-        lookupForLocale,
-        decorateLine,
-        getUidFor,
-        setOverrideForLocale,
-        setEditMode: setMode,
-        // Host calls this after the active script or active locale changes
-        // (anywhere the in-memory project / locale data has been swapped).
-        notifyContextChange: () => updateStats(),
-        isActive: () => STATE.translationMode,
-        refreshExportStatus,
+    const headers = ['Type', 'Gender', 'CharacterName', 'en-US', targetLocale, 'ID', 'FileName', 'NodeTitle', 'Notes'];
+    const rows = [];
+    const charCtx = {
+      characterKeys: STATE.characterKeys || {},
+      characterTranslations: STATE.characterTranslations || {},
+      locale: 'en-US',
     };
+    const genderMap = STATE.speakerGender || {};
+    const getNote = STATE.hooks.getNote || (() => '');
+
+    for (const group of STATE.hooks.getAllGroups()) {
+      const enEntry = STATE.hooks.getEntry(group, 'en-US');
+      if (!enEntry || !enEntry.project) continue;
+      const guid = STATE.guids[enEntry.filename];
+      if (!guid) continue;
+      const rawNodes = enEntry.project.rawNodes || [];
+      let so;
+      try {
+        so = YarnConverter.buildSO(rawNodes, guid, charCtx);
+      } catch (e) {
+        console.warn('[translation-ui] buildSO failed for', enEntry.filename, e);
+        continue;
+      }
+      for (const node of so) {
+        const noteText = getNote(group, node.title) || '';
+        let firstRow = true;
+        for (const line of node.textLines) {
+          if (line.category !== 'Dialogue' && line.category !== 'Option') continue;
+          if (!line.dialogue) continue;
+          rows.push([
+            line.category,
+            genderMap[line.characterName] || '',
+            line.characterName || '',
+            line.dialogue,
+            '',
+            line.uid,
+            enEntry.filename,
+            node.title,
+            firstRow ? noteText : '',
+          ]);
+          firstRow = false;
+        }
+      }
+    }
+
+    if (rows.length === 0) return null;
+    return {
+      format: 'csv',
+      fileName: `${targetLocale}_translations.csv`,
+      headers,
+      rows,
+      idCol: 5,
+      localeCol: 4,
+      csvHasBom: true,
+    };
+  }
+
+  // Augment an uploaded source structure (whatever shape the user gave us)
+  // with FileName / NodeTitle / Notes columns so notes round-trip even when
+  // the original file didn't carry them. No-op when the original already
+  // has every column we'd add.
+  function augmentSourceForExport(source) {
+    if (!source || !STATE.hooks || !STATE.hooks.getNote) return source;
+    const out = {
+      format:    source.format,
+      fileName:  source.fileName,
+      headers:   source.headers.slice(),
+      rows:      source.rows.map(r => r.slice()),
+      idCol:     source.idCol,
+      localeCol: source.localeCol,
+      csvHasBom: source.csvHasBom,
+    };
+
+    const headerIdx = (name) => {
+      const target = name.toLowerCase();
+      for (let i = 0; i < out.headers.length; i++) {
+        if (String(out.headers[i] || '').toLowerCase() === target) return i;
+      }
+      return -1;
+    };
+
+    const ensureCol = (name) => {
+      let idx = headerIdx(name);
+      if (idx !== -1) return idx;
+      idx = out.headers.length;
+      out.headers.push(name);
+      out.rows.forEach(r => r.push(''));
+      return idx;
+    };
+
+    // Need NodeTitle to know which row maps to which node; derive from UID
+    // when the user's source didn't include the column.
+    const fileCol  = ensureCol('FileName');
+    const nodeCol  = ensureCol('NodeTitle');
+    const notesCol = ensureCol('Notes');
+
+    // Reverse map: guid → {filename, group, project}
+    const guidLookup = {};
+    if (STATE.guids && STATE.hooks.getAllGroups && STATE.hooks.getEntry) {
+      for (const group of STATE.hooks.getAllGroups()) {
+        const en = STATE.hooks.getEntry(group, 'en-US');
+        if (!en) continue;
+        const g = STATE.guids[en.filename];
+        if (g) guidLookup[g] = { filename: en.filename, group, project: en.project };
+      }
+    }
+
+    // First pass: ensure every row has FileName + NodeTitle if we can derive them.
+    const seenNodeFirstRow = new Map(); // group||title → rowIdx of first row for that node
+    for (let i = 0; i < out.rows.length; i++) {
+      const row = out.rows[i];
+      const uid = (row[out.idCol] || '').toString().trim();
+      const m = uid.match(/^(.+)-(\d+)-\d+$/);
+      if (!m) continue;
+      const meta = guidLookup[m[1]];
+      if (!meta) continue;
+      const nodeIndex = parseInt(m[2], 10);
+      const nodeTitle = meta.project?.rawNodes?.[nodeIndex]?.title;
+      if (!nodeTitle) continue;
+      if (!row[fileCol]) row[fileCol] = meta.filename;
+      if (!row[nodeCol]) row[nodeCol] = nodeTitle;
+      const key = meta.group + '\x00' + nodeTitle;
+      if (!seenNodeFirstRow.has(key)) {
+        seenNodeFirstRow.set(key, { rowIdx: i, group: meta.group, title: nodeTitle });
+      }
+    }
+
+    // Second pass: drop the note onto the first row of each node (only if
+    // the cell isn't already populated by the user).
+    for (const { rowIdx, group, title } of seenNodeFirstRow.values()) {
+      if (out.rows[rowIdx][notesCol]) continue;
+      const note = STATE.hooks.getNote(group, title) || '';
+      if (note) out.rows[rowIdx][notesCol] = note;
+    }
+
+    return out;
+  }
+
+  // Walk an imported source's rows looking for a Notes column; restore each
+  // non-empty cell into yp.notes via the host's setNote hook.
+  function restoreNotesFromSource(source) {
+    if (!source || !source.headers || !source.rows) return 0;
+    if (!STATE.hooks || !STATE.hooks.setNote) return 0;
+
+    const headerIdx = (name) => {
+      const target = name.toLowerCase();
+      for (let i = 0; i < source.headers.length; i++) {
+        if (String(source.headers[i] || '').toLowerCase() === target) return i;
+      }
+      return -1;
+    };
+    const notesCol = headerIdx('Notes');
+    if (notesCol === -1) return 0;
+    const fileCol = headerIdx('FileName');
+    const nodeCol = headerIdx('NodeTitle');
+
+    // For finding group when only FileName is available.
+    const filenameToGroup = {};
+    if (STATE.hooks.getAllGroups && STATE.hooks.getEntry) {
+      for (const group of STATE.hooks.getAllGroups()) {
+        const en = STATE.hooks.getEntry(group, 'en-US');
+        if (en) filenameToGroup[en.filename] = group;
+      }
+    }
+    const guidLookup = {};
+    if (STATE.guids) {
+      for (const [fn, g] of Object.entries(STATE.guids)) {
+        guidLookup[g] = { filename: fn, group: filenameToGroup[fn] };
+      }
+    }
+    const idCol = source.idCol;
+
+    let restored = 0;
+    for (const row of source.rows) {
+      const noteText = (row[notesCol] || '').toString();
+      if (!noteText) continue;
+
+      // Resolve (group, nodeTitle) for this row.
+      let group = null;
+      let nodeTitle = nodeCol !== -1 ? (row[nodeCol] || '').toString().trim() : '';
+      if (fileCol !== -1) {
+        const fn = (row[fileCol] || '').toString().trim();
+        if (fn && filenameToGroup[fn]) group = filenameToGroup[fn];
+      }
+      if ((!group || !nodeTitle) && idCol != null) {
+        const uid = (row[idCol] || '').toString().trim();
+        const m = uid.match(/^(.+)-(\d+)-\d+$/);
+        if (m) {
+          const meta = guidLookup[m[1]];
+          if (meta) {
+            if (!group) group = meta.group;
+            if (!nodeTitle && filenameToGroup[meta.filename]) {
+              const en = STATE.hooks.getEntry(filenameToGroup[meta.filename], 'en-US');
+              const idx = parseInt(m[2], 10);
+              nodeTitle = en?.project?.rawNodes?.[idx]?.title || '';
+            }
+          }
+        }
+      }
+      if (!group || !nodeTitle) continue;
+      STATE.hooks.setNote(group, nodeTitle, noteText);
+      restored++;
+    }
+    return restored;
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // ----- 給 ui.js 算 UID -----
+
+  function getUidFor(filename, nodeIndex, srcLine) {
+    if (!STATE.guids || !filename) return null;
+    const guid = STATE.guids[filename];
+    if (!guid) return null;
+    return `${guid}-${nodeIndex}-${srcLine}`;
+  }
+
+  // Cross-locale lookup used by the translation-comparison modal in ui.js.
+  // Unlike lookupLine() — which only looks at the current activeLocale —
+  // this reaches into TranslationState[locale] for any locale, so the
+  // comparison reflects imported files + inline edits per language.
+  function lookupForLocale(locale, uid, fallbackText) {
+    if (!locale || !uid) return { text: fallbackText, status: 'inactive' };
+    if (isSourceLocale(locale)) return { text: fallbackText, status: 'inactive' };
+    const ts = STATE.states.get(locale) || (
+      typeof TranslationState !== 'undefined'
+        ? (() => {
+          const fresh = TranslationState.createState(locale);
+          STATE.states.set(locale, fresh);
+          return fresh;
+         })()
+        : null
+    );
+    if (!ts) return { text: fallbackText, status: 'untranslated' };
+    const text = ts.get(uid);
+    if (text == null || text === '') {
+      return { text: fallbackText, status: 'untranslated' };
+    }
+    return { text, status: ts.source(uid) };
+  }
+
+  // Used by Compare Mode (ui.js) to write edits back to a non-active locale.
+  // Mirrors the inline editor's flow: setOverride → markEditDirty → updateStats.
+  function setOverrideForLocale(locale, uid, text) {
+    if (!locale || !uid) return;
+    if (isSourceLocale(locale)) {
+      throw new Error(`Cannot edit source locale "${locale}"`);
+    }
+    const ts = getOrCreateState(locale);
+    if (!ts) return;
+    ts.setOverride(uid, text);
+    if (STATE.hooks && STATE.hooks.markEditDirty) STATE.hooks.markEditDirty();
+    // Stats reflect the *active* locale; only refresh if that's what we touched.
+    const active = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (active === locale) {
+      updateStats();
+      if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+    }
+  }
+
+  global.TranslationUI = {
+    install,
+    lookupLine,
+    lookupForLocale,
+    decorateLine,
+    getUidFor,
+    setOverrideForLocale,
+    setEditMode: setMode,
+    // Host calls this after the active script or active locale changes
+    // (anywhere the in-memory project / locale data has been swapped).
+    notifyContextChange: () => updateStats(),
+    isActive: () => STATE.translationMode,
+    refreshExportStatus,
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

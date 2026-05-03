@@ -998,7 +998,7 @@
       state.lastVarValues = {};
       $('transcript').innerHTML = '';
       $('current-node').textContent = '—';
-      const flat = document.getElementById('flat-edit-view');
+      const flat = $('flat-edit-view');
       if (flat) flat.innerHTML = '';
       removePendingActions();
       updateBackBtn();
@@ -1609,7 +1609,7 @@
 
   // Lazy-create the flat edit view container as a sibling of #transcript.
   function getFlatViewEl() {
-    let el = document.getElementById('flat-edit-view');
+    let el = $('flat-edit-view');
     if (el) return el;
     el = document.createElement('div');
     el.id = 'flat-edit-view';
@@ -1773,7 +1773,7 @@
   // the current node first; if the label belongs to a different node,
   // navigate there and scroll once the flat view rebuilds.
   function jumpToLabel(labelName) {
-    const view = document.getElementById('flat-edit-view');
+    const view = $('flat-edit-view');
     if (!view) return;
     const sel = `[data-label-name="${CSS.escape(labelName)}"]`;
     let target = view.querySelector(sel);
