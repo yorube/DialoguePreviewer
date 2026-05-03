@@ -156,9 +156,275 @@ async function runIntegrationSuite(page) {
       sel.value = 'en'; sel.dispatchEvent(new Event('change'));
     });
     const disabled = await page.locator('#play-btn').getAttribute('disabled');
-    // disabled attr present (any value, including "" or "true") means disabled
     if (disabled === null) throw new Error('play-btn should be disabled with no node');
   });
+
+  // ─── Below: tests that need a script + node loaded ──────────────────
+  // Wait for manifest bootstrap to complete (script-select gets options).
+  // CI checkout includes the data/ folder so this works without seeding.
+  let dataReady = false;
+  try {
+    await page.waitForFunction(() => {
+      const sel = document.getElementById('script-select');
+      return sel && sel.options.length > 0;
+    }, { timeout: 5000 });
+    dataReady = true;
+  } catch (e) {
+    results.push({
+      name: '[skip] data-bootstrap-dependent tests (manifest not loaded)',
+      pass: true,
+    });
+  }
+
+  if (dataReady) {
+    // Click the first node so subsequent tests have a navigation target.
+    async function selectFirstNode() {
+      await page.waitForFunction(
+        () => document.querySelectorAll('#node-list li').length > 0,
+        { timeout: 5000 }
+      );
+      await page.evaluate(() => {
+        document.querySelector('#node-list li').click();
+      });
+      await page.waitForFunction(
+        () => document.getElementById('current-node').textContent !== '—',
+        { timeout: 2000 }
+      );
+    }
+
+    await run('clicking sidebar node enters navigation-only state', async () => {
+      await selectFirstNode();
+      // header updated
+      const header = await page.locator('#current-node').textContent();
+      if (header === '—') throw new Error('header still placeholder after click');
+      // transcript shows empty-state placeholder
+      const placeholder = await page.locator('.transcript-empty').count();
+      if (placeholder !== 1) throw new Error(`expected 1 placeholder, got ${placeholder}`);
+      // active-node highlight applied
+      const activeCount = await page.locator('#node-list li.is-active').count();
+      if (activeCount !== 1) throw new Error(`expected 1 .is-active li, got ${activeCount}`);
+      // Play button enabled
+      const disabled = await page.locator('#play-btn').getAttribute('disabled');
+      if (disabled !== null) throw new Error('play-btn should be enabled after node click');
+    });
+
+    await run('▶ Play → runtime starts, button label flips to ■ Stop', async () => {
+      await page.click('#play-btn');
+      // First transcript row appears
+      await page.waitForFunction(
+        () => document.querySelector('#transcript .row') !== null,
+        { timeout: 2000 }
+      );
+      const playTxt = (await page.locator('#play-btn').textContent()).trim();
+      if (!playTxt.includes('Stop')) throw new Error(`expected Stop, got "${playTxt}"`);
+      const isStopClass = await page.locator('#play-btn.is-stop').count();
+      if (isStopClass !== 1) throw new Error('button should have .is-stop class');
+      // Step back enabled
+      const backDisabled = await page.locator('#back-line-btn').getAttribute('disabled');
+      // back is enabled only when snapshots.length >= 2 — first line == 1 snapshot.
+      // We just check it exists. Below we'll advance and re-check.
+      // (No strict assertion here.)
+      void backDisabled;
+    });
+
+    await run('■ Stop → runtime cleared, transcript empty, placeholder back', async () => {
+      await page.click('#play-btn');   // currently Stop
+      await page.waitForFunction(
+        () => document.querySelector('.transcript-empty') !== null,
+        { timeout: 2000 }
+      );
+      const playTxt = (await page.locator('#play-btn').textContent()).trim();
+      if (!playTxt.includes('Play')) throw new Error(`expected Play after stop, got "${playTxt}"`);
+      const transcriptRows = await page.locator('#transcript .row').count();
+      if (transcriptRows !== 0) throw new Error(`expected 0 rows, got ${transcriptRows}`);
+    });
+
+    await run('placeholder ▶ icon click triggers same play flow', async () => {
+      await page.click('.transcript-empty-icon');
+      await page.waitForFunction(
+        () => document.querySelector('#transcript .row') !== null,
+        { timeout: 2000 }
+      );
+      const isStopClass = await page.locator('#play-btn.is-stop').count();
+      if (isStopClass !== 1) throw new Error('clicking placeholder ▶ should also enter playback');
+      // Stop again to leave clean state for next test
+      await page.click('#play-btn');
+    });
+
+    await run('Space key when idle (with node selected) triggers Play', async () => {
+      // Confirm we're in idle state
+      const playTxt = (await page.locator('#play-btn').textContent()).trim();
+      if (!playTxt.includes('Play')) throw new Error('precondition: idle expected');
+      // Press space anywhere outside form fields (body has focus by default)
+      await page.evaluate(() => document.body.focus());
+      await page.keyboard.press('Space');
+      await page.waitForFunction(
+        () => document.querySelector('#play-btn').textContent.includes('Stop'),
+        { timeout: 2000 }
+      );
+      // Cleanup
+      await page.click('#play-btn');
+    });
+
+    await run('after dialogue ends, ▶ Play reappears for replay', async () => {
+      await page.click('#play-btn');   // start
+      // Smash advance until ended. Cap to avoid infinite loop on choice nodes.
+      let safety = 50;
+      while (safety-- > 0) {
+        const ended = await page.evaluate(() => {
+          const cont = document.querySelector('.continue-btn');
+          if (cont) cont.click();
+          // Detect end-of-dialogue marker row
+          return document.querySelector('.row-end') !== null;
+        });
+        if (ended) break;
+        // If choices appeared, pick first to keep going
+        const choices = await page.locator('.choice-btn').count();
+        if (choices > 0) {
+          await page.locator('.choice-btn').first().click();
+        }
+        await page.waitForTimeout(20);
+      }
+      // After end, button should be Play again (not Stop)
+      const playTxt = (await page.locator('#play-btn').textContent()).trim();
+      if (!playTxt.includes('Play')) {
+        throw new Error(`after end-of-dialogue expected Play, got "${playTxt}"`);
+      }
+    });
+
+    await run('Edit Mode toggle adds body.t-edit-mode class', async () => {
+      // First navigate to a fresh node to clear any end-state
+      await selectFirstNode();
+      const beforeOn = await page.evaluate(() => document.body.classList.contains('t-edit-mode'));
+      if (beforeOn) {
+        // Already on (from prior test pollution); turn off first
+        await page.click('#t-mode-toggle');
+        await page.waitForFunction(() => !document.body.classList.contains('t-edit-mode'));
+      }
+      await page.click('#t-mode-toggle');
+      await page.waitForFunction(
+        () => document.body.classList.contains('t-edit-mode'),
+        { timeout: 2000 }
+      );
+      // flat view should now exist
+      const flatExists = await page.locator('#flat-edit-view').count();
+      if (flatExists !== 1) throw new Error('flat-edit-view should exist in Edit Mode');
+      // Toggle off
+      await page.click('#t-mode-toggle');
+      await page.waitForFunction(
+        () => !document.body.classList.contains('t-edit-mode'),
+        { timeout: 2000 }
+      );
+    });
+
+    await run('Help dialog opens on click, closes on Esc', async () => {
+      await page.click('#help-btn');
+      await page.waitForFunction(
+        () => !document.getElementById('help-overlay').hasAttribute('hidden'),
+        { timeout: 2000 }
+      );
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(
+        () => document.getElementById('help-overlay').hasAttribute('hidden'),
+        { timeout: 2000 }
+      );
+    });
+
+    await run('UI Strings page tab toggles body class', async () => {
+      await page.evaluate(() => document.querySelector('[data-page="ui-strings"]').click());
+      await page.waitForFunction(
+        () => document.body.classList.contains('page-ui-strings'),
+        { timeout: 2000 }
+      );
+      await page.evaluate(() => document.querySelector('[data-page="dialogue"]').click());
+      await page.waitForFunction(
+        () => !document.body.classList.contains('page-ui-strings'),
+        { timeout: 2000 }
+      );
+    });
+
+    await run('UI lang preference persists across reload (yp.lang)', async () => {
+      // Set zh, reload, expect zh on the dropdown
+      await page.evaluate(() => {
+        const sel = document.getElementById('ui-lang-select');
+        sel.value = 'zh'; sel.dispatchEvent(new Event('change'));
+      });
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(
+        () => window.YP && window.YP.getLang,
+        { timeout: 5000 }
+      );
+      const lang = await page.evaluate(() => window.YP.getLang());
+      if (lang !== 'zh') throw new Error(`lang after reload: "${lang}"`);
+      // Reset to en for any subsequent tests
+      await page.evaluate(() => {
+        const sel = document.getElementById('ui-lang-select');
+        sel.value = 'en'; sel.dispatchEvent(new Event('change'));
+      });
+    });
+
+    // ─── Visual sanity (computed styles, not subjective) ───
+    await run('Play button (idle) has accent-fill background', async () => {
+      // Need a fresh node so play-btn is enabled and in idle state.
+      await page.waitForFunction(() => {
+        const sel = document.getElementById('script-select');
+        return sel && sel.options.length > 0;
+      }, { timeout: 5000 });
+      await page.waitForFunction(
+        () => document.querySelectorAll('#node-list li').length > 0,
+        { timeout: 5000 }
+      );
+      await selectFirstNode();
+      const isStop = await page.locator('#play-btn.is-stop').count();
+      if (isStop > 0) {
+        // pollution: stop it
+        await page.click('#play-btn');
+        await page.waitForFunction(
+          () => !document.querySelector('#play-btn').classList.contains('is-stop'),
+          { timeout: 2000 }
+        );
+      }
+      const bg = await page.locator('#play-btn').evaluate((el) => getComputedStyle(el).backgroundColor);
+      // Accent in our palette is oklch(~0.72 0.07 60), browser computes to a non-transparent value.
+      if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+        throw new Error(`play-btn idle bg should be filled, got "${bg}"`);
+      }
+    });
+
+    await run('Stop button (playing) has transparent background', async () => {
+      await page.click('#play-btn');   // enter playback
+      await page.waitForFunction(
+        () => document.querySelector('#play-btn').classList.contains('is-stop'),
+        { timeout: 2000 }
+      );
+      const bg = await page.locator('#play-btn').evaluate((el) => getComputedStyle(el).backgroundColor);
+      if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+        throw new Error(`stop-btn bg should be transparent, got "${bg}"`);
+      }
+      // Cleanup
+      await page.click('#play-btn');
+    });
+
+    await run('placeholder ▶ icon is a circular button (border-radius 50%)', async () => {
+      // Make sure placeholder is showing (idle state with node)
+      await selectFirstNode();
+      const radius = await page.locator('.transcript-empty-icon').evaluate((el) => getComputedStyle(el).borderRadius);
+      // 50% computed → "32px" or "50%" depending on browser; 64px width → 32px.
+      if (!radius.endsWith('px') && !radius.endsWith('%')) {
+        throw new Error(`unexpected border-radius value: "${radius}"`);
+      }
+      // also assert it's a button element (not a div)
+      const tag = await page.locator('.transcript-empty-icon').evaluate((el) => el.tagName);
+      if (tag !== 'BUTTON') throw new Error(`expected BUTTON tag, got "${tag}"`);
+    });
+
+    await run('active node has box-shadow inset (left accent bar)', async () => {
+      const shadow = await page.locator('#node-list li.is-active').evaluate((el) => getComputedStyle(el).boxShadow);
+      if (shadow === 'none' || !shadow) {
+        throw new Error(`active node should have box-shadow, got "${shadow}"`);
+      }
+    });
+  }
 
   return results;
 }

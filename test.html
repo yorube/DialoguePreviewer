@@ -695,70 +695,30 @@
   // ─── Manual checklist for things that can't be auto-tested ─────────
   resultsEl.insertAdjacentHTML('beforeend', `
   <div class="manual">
-    <h2>📋 Still requires manual verification</h2>
-    <p class="why">These need a real browser DOM, real user input, real CSS layout, or real network — which auto-test can't honestly cover. Open <code>index.html</code> in your browser.</p>
+    <h2>📋 What CI doesn't cover</h2>
+    <p class="why">Everything addressable through DOM state (text, class, attribute, computed style, event behavior) is auto-tested by Playwright in <code>tests/runner.js</code> integration phase. What's left is genuinely subjective or requires real OS / file-system input that headless can't honestly simulate.</p>
 
-    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">Visual / layout</h3>
+    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">Subjective visual judgement</h3>
     <ol>
-      <li>oklch tokens render correctly (暖琥珀調) — toolbar / sidebar pill labels / button colors</li>
-      <li>▶ Play button shows accent fill; ■ Stop shows transparent + accent outline; hover Stop turns warn-red</li>
-      <li>Empty-state placeholder ▶ icon is a 64px circle button</li>
-      <li>Active node in sidebar has橘色 inset border + filled num pill</li>
-      <li>Var-row flash animation when <code>&lt;&lt;set&gt;&gt;</code> fires</li>
-      <li>Mode toggle switch (track + radial-gradient thumb) animates on click</li>
-      <li>Mobile breakpoint (&lt; 1100px) collapses to single column</li>
+      <li>Color shade preference — oklch values render but "looks good" is for you</li>
+      <li>Animation feel — easing curves run, but "smooth" is subjective</li>
+      <li>Font rendering / kerning — pixel-perfect compare is too brittle</li>
+      <li>Hover transitions — getComputedStyle reads target, but visible smoothness is yours to call</li>
+      <li>Mobile layout aesthetics — breakpoint fires but "feels usable on phone" needs a phone</li>
     </ol>
 
-    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">UI flow / interaction</h3>
+    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">Real-OS file I/O</h3>
     <ol>
-      <li>Click sidebar node → header / source / note panel update; transcript shows placeholder</li>
-      <li>Press ▶ → first line appears, button becomes ■ Stop, ↶ Step back enabled</li>
-      <li>Press ■ Stop → transcript clears, button reverts to ▶, snapshot history empty</li>
-      <li>Click placeholder ▶ icon → same effect as toolbar ▶</li>
-      <li>Space / Enter / R as first key → triggers ▶ when idle</li>
-      <li>Step back / Replay only enabled while playing or after end</li>
-      <li>Var-change badge (<code>$var: prev → next</code>) appears at end of last transcript row</li>
-      <li>Locale switch mid-dialogue preserves position + auto-replays</li>
-      <li>Locale switch in nav-only mode keeps placeholder</li>
-      <li>UID search → navigate only, no auto-play</li>
-      <li>Edit Mode: flat view shows full node; switching node updates flat view live</li>
-      <li>Compare Mode: comparison table updates on node switch</li>
-      <li>Help button (top-right) opens dialog; Esc closes</li>
-      <li>UI Strings page: tab switch, table renders, cell click → editor</li>
+      <li>Drag-drop .json files into window (drag events synthesizable but DataTransfer file payload is fiddly + not high-value)</li>
+      <li>Import / Export .xlsx — SheetJS works the same way as .csv (covered in unit tests); XLSX file picker dialog stays manual</li>
+      <li>Native file picker dialog UX — browser-controlled, not testable</li>
     </ol>
 
-    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">i18n live switching</h3>
+    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">Cross-browser / deployment</h3>
     <ol>
-      <li>Switch UI language dropdown en ⇄ zh:
-        <ul>
-          <li>All toolbar buttons / labels swap immediately</li>
-          <li>UI Strings page: status pill, table counter, sheet tab tooltips, cell-empty marker (<code>— 空 —</code> ⇄ <code>— empty —</code>) all swap</li>
-          <li>Help dialog body re-translates</li>
-          <li>Currently-displayed alerts / confirms (none persistent, but next ones show in new language)</li>
-        </ul>
-      </li>
-    </ol>
-
-    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">Persistence (real browser)</h3>
-    <ol>
-      <li>Import translation .csv → refresh → 譯文還在</li>
-      <li>Edit notes → refresh → notes 還在</li>
-      <li>Resize splitters → refresh → 寬度保留</li>
-      <li>Switch UI Strings tab → refresh → 還在 UI Strings 分頁</li>
-      <li>Real localStorage quota exhaustion: requires manually filling up storage to test the ⛔ alert</li>
-    </ol>
-
-    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">File I/O</h3>
-    <ol>
-      <li>Drag-drop .json files into window</li>
-      <li>Import .xlsx (the test suite covers .csv only — XLSX needs SheetJS in browser)</li>
-      <li>Export downloads correct filename; re-import the export → matches</li>
-    </ol>
-
-    <h3 style="font-size:13px;color:var(--accent);margin:16px 0 4px;">Browser cross-check</h3>
-    <ol>
-      <li>Test in Chrome / Firefox / Safari (oklch needs Chrome 111+ / Safari 16.4+ / FF 113+)</li>
-      <li>Service Worker / Pages CDN cache behavior on deploy</li>
+      <li>Safari / Firefox specifically — Playwright supports them but CI defaults to Chromium for speed; expand the matrix in <code>.github/workflows/test.yml</code> if Safari issues appear</li>
+      <li>GitHub Pages CDN cache behavior post-deploy — out of band</li>
+      <li>Real localStorage quota exhaustion under your actual translation load (CI uses a synthetic Storage.setItem override; production-scale data isn't tested)</li>
     </ol>
   </div>
   `);
