@@ -186,7 +186,8 @@
       'tr.export.ago.days': '{n}d',
       'flat.end.tip': 'Dialogue ends here',
       'flat.goto.tip': 'Jump to @{label}',
-      'help.btn.tip': 'Help',
+      'help.btn': '❔ Help',
+      'help.btn.tip': 'Open the help dialog',
       'help.title': 'How to use this previewer',
       'help.body': `
 <h3>Preview a script</h3>
@@ -374,7 +375,8 @@
       'tr.export.ago.days': '{n} 天',
       'flat.end.tip': '對話在這裡結束',
       'flat.goto.tip': '點此跳到 @{label}',
-      'help.btn.tip': '說明',
+      'help.btn': '❔ 說明',
+      'help.btn.tip': '開啟說明視窗',
       'help.title': '使用說明',
       'help.body': `
 <h3>預覽劇本</h3>
