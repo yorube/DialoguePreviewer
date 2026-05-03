@@ -1,0 +1,11 @@
+{
+  "name": "dialogue-previewer-tests",
+  "private": true,
+  "description": "Test harness for the static-HTML DialoguePreviewer (no app dependencies; only used by CI to drive Playwright against test.html)",
+  "scripts": {
+    "test": "node tests/runner.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}
