@@ -479,28 +479,17 @@
       const main = document.createElement('span');
       main.textContent = t('tr.stats.progress', { done, total });
       el.appendChild(main);
+      if (s && s.sourceMeta && s.sourceMeta.fileName) {
+        const file = document.createElement('span');
+        file.style.opacity = '0.6';
+        file.textContent = t('tr.stats.loadedFile', { file: s.sourceMeta.fileName });
+        el.appendChild(file);
+      }
       updateProgress(done, total);
       el.classList.toggle('has-untranslated', !isSrc && done < total);
-    } else if (s && (s.baselineCount || s.overrideCount)) {
-      // No project UIDs available yet (e.g. en-US data still loading)
-      // but we do have a state. Fall back to the legacy summary so the
-      // user still sees something meaningful.
-      const main = document.createElement('span');
-      main.textContent = t('tr.stats.loaded', {
-        locale: activeLocale, b: s.baselineCount, o: s.overrideCount,
-      });
-      el.appendChild(main);
-      el.classList.remove('has-untranslated');
     } else {
       el.textContent = t('tr.stats.notLoaded', { locale: activeLocale });
       el.classList.remove('has-untranslated');
-    }
-
-    if (s && s.sourceMeta && s.sourceMeta.fileName) {
-      const file = document.createElement('span');
-      file.style.opacity = '0.6';
-      file.textContent = t('tr.stats.loadedFile', { file: s.sourceMeta.fileName });
-      el.appendChild(file);
     }
   }
 
