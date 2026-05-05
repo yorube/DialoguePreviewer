@@ -185,6 +185,50 @@
       'tr.export.ago.days': '{n}d',
       'flat.end.tip': 'Dialogue ends here',
       'flat.goto.tip': 'Jump to @{label}',
+      // ----- Translation review status -----
+      'status.untranslated':         'Untranslated',
+      'status.translated':           'Translated',
+      'status.edited':               'Inline-edited',
+      'status.needsReview':          'Needs review',
+      'status.approved':             'Approved',
+      'sidebar.statusFilter.label':  'Status:',
+      'sidebar.statusFilter.all':    'All',
+      'sidebar.statusFilter.all.tip':          'Show every node (clear status filter)',
+      'sidebar.statusFilter.untranslated':     'Has untranslated',
+      'sidebar.statusFilter.untranslated.tip': 'Only show nodes with at least one untranslated line',
+      'sidebar.statusFilter.needsReview':      'Has needs-review',
+      'sidebar.statusFilter.needsReview.tip':  'Only show nodes with at least one line marked needs-review',
+      'sidebar.statusFilter.approved':         'Has approved',
+      'sidebar.statusFilter.approved.tip':     'Only show nodes with at least one line marked approved',
+      'sidebar.statusFilter.done':             'Fully done',
+      'sidebar.statusFilter.done.tip':         'Only show nodes with no untranslated and no needs-review lines',
+      'sidebar.nodeProgress.tip':              '{done}/{total} translated · {nr} needs-review · {ap} approved · {ed} edited',
+      'tr.statusChip.empty.label':             'set status',
+      'tr.statusChip.empty.tip':               'Click to set review status',
+      'tr.statusChip.tip':                     'Click to change review status',
+      'tr.statusChip.menu.clear':              'Clear status',
+      'tr.statusChip.menu.needsReview':        'Mark as needs review',
+      'tr.statusChip.menu.approved':           'Mark as approved',
+      'tr.bulk.approveAll':                    '✓ Approve all ({n})',
+      'tr.bulk.approveAll.tip':                'Mark every translatable line in this node as approved',
+      'tr.bulk.clearAll':                      '🔁 Clear status ({n})',
+      'tr.bulk.clearAll.tip':                  'Clear review status from every line in this node',
+      'tr.bulk.confirm.approve':               'Mark {n} lines in this node as approved?',
+      'tr.bulk.confirm.clear':                 'Clear review status on {n} lines in this node?',
+      'tr.bulk.empty':                         'This node has no translatable lines.',
+      'tr.alert.statusesRestored':             '\n  ✓ review statuses restored: {n}',
+      'tr.progress.disclosure.expand':         'Show status breakdown',
+      'tr.progress.disclosure.collapse':       'Hide status breakdown',
+      'tr.progress.breakdown.untranslated':    'untranslated {n}',
+      'tr.progress.breakdown.edited':          'edited {n}',
+      'tr.progress.breakdown.needsReview':     'needs-review {n}',
+      'tr.progress.breakdown.approved':        'approved {n}',
+      'tr.progress.breakdown.cleanBaseline':   'imported {n}',
+      'tr.progress.breakdown.filterTip':       'Filter the sidebar to nodes containing this status',
+      'compare.cell.tip.source':               'Source language (not editable)',
+      'compare.cell.tip.translated':           'Translated (from imported file)',
+      'compare.cell.tip.untranslated':         'Untranslated — falls back to the source text',
+      'compare.cell.tip.override':             'Inline-edited in browser',
       // ----- UI Strings page -----
       'ui.brand': 'UI Strings',
       'ui.import': '📥 Import .xlsx',
@@ -399,6 +443,50 @@
       'tr.export.ago.days': '{n} 天',
       'flat.end.tip': '對話在這裡結束',
       'flat.goto.tip': '點此跳到 @{label}',
+      // ----- 翻譯校對狀態 -----
+      'status.untranslated':         '未翻譯',
+      'status.translated':           '已翻譯',
+      'status.edited':               '站內編輯',
+      'status.needsReview':          '待校',
+      'status.approved':             '已核可',
+      'sidebar.statusFilter.label':  '狀態:',
+      'sidebar.statusFilter.all':    '全部',
+      'sidebar.statusFilter.all.tip':          '顯示所有節點(清掉狀態篩選)',
+      'sidebar.statusFilter.untranslated':     '未完成',
+      'sidebar.statusFilter.untranslated.tip': '只顯示有未翻譯行的節點',
+      'sidebar.statusFilter.needsReview':      '待校',
+      'sidebar.statusFilter.needsReview.tip':  '只顯示有「待校」行的節點',
+      'sidebar.statusFilter.approved':         '有已核可',
+      'sidebar.statusFilter.approved.tip':     '只顯示有「已核可」行的節點',
+      'sidebar.statusFilter.done':             '全完成',
+      'sidebar.statusFilter.done.tip':         '只顯示沒有未翻譯也沒有待校的節點',
+      'sidebar.nodeProgress.tip':              '{done}/{total} 已翻 · 待校 {nr} · 已核可 {ap} · 站內編輯 {ed}',
+      'tr.statusChip.empty.label':             '設狀態',
+      'tr.statusChip.empty.tip':               '點擊設定校對狀態',
+      'tr.statusChip.tip':                     '點擊變更校對狀態',
+      'tr.statusChip.menu.clear':              '清除狀態',
+      'tr.statusChip.menu.needsReview':        '標記為待校',
+      'tr.statusChip.menu.approved':           '標記為已核可',
+      'tr.bulk.approveAll':                    '✓ 全節點核可 ({n})',
+      'tr.bulk.approveAll.tip':                '把這個節點所有可翻譯行標為已核可',
+      'tr.bulk.clearAll':                      '🔁 清空狀態 ({n})',
+      'tr.bulk.clearAll.tip':                  '清掉這個節點所有行的校對狀態',
+      'tr.bulk.confirm.approve':               '把這個節點 {n} 行標記為已核可?',
+      'tr.bulk.confirm.clear':                 '清掉這個節點 {n} 行的校對狀態?',
+      'tr.bulk.empty':                         '這個節點沒有可翻譯的行。',
+      'tr.alert.statusesRestored':             '\n  ✓ 還原校對狀態:{n} 條',
+      'tr.progress.disclosure.expand':         '展開狀態細目',
+      'tr.progress.disclosure.collapse':       '收起狀態細目',
+      'tr.progress.breakdown.untranslated':    '未翻 {n}',
+      'tr.progress.breakdown.edited':          '站內編輯 {n}',
+      'tr.progress.breakdown.needsReview':     '待校 {n}',
+      'tr.progress.breakdown.approved':        '已核可 {n}',
+      'tr.progress.breakdown.cleanBaseline':   '已匯入 {n}',
+      'tr.progress.breakdown.filterTip':       '依此狀態篩選 sidebar 節點清單',
+      'compare.cell.tip.source':               '原文(不可編輯)',
+      'compare.cell.tip.translated':           '已翻譯(來自匯入檔)',
+      'compare.cell.tip.untranslated':         '未翻譯 — 顯示原文回退',
+      'compare.cell.tip.override':             '站內編輯',
       // ----- UI Strings 分頁 -----
       'ui.brand': 'UI 字串',
       'ui.import': '📥 匯入 .xlsx',
@@ -564,6 +652,7 @@
     snapshots: [],                  // {rt, transcriptHtml, nodeTitle}
     varOverrides: new Map(),        // user-edited var values, re-applied on start()
     nodeFilter: '',                 // text in the node-list filter input
+    statusFilter: new Set(),        // sidebar status filter chips: 'untranslated'|'needsReview'|'approved'|'done'
     speakerGender: {},              // name → 'M' | 'F' | 'N'
     noteSaveTimer: null,            // debounce timer for note autosave
     noteLoadedFor: null,            // {group, title} the textarea is bound to
@@ -1025,6 +1114,11 @@
     state.activeGroup = name;
     // Different scripts have different variables; stale overrides would mislead.
     state.varOverrides.clear();
+    // Status filter is per-script meaningful but cross-script noise — clear
+    // it so a "Has needs-review" filter picked on one script doesn't make
+    // the new script appear empty.
+    state.statusFilter.clear();
+    renderStatusFilterBar();
     // Keep activeLocale across script switches when the new script has it.
     await refreshLocaleDropdown();
   }
@@ -1098,10 +1192,17 @@
     const proj = activeProject();
     if (!proj) return;
 
+    // Per-node status data drives both the status-filter and the dots/count.
+    // Computed once per refresh; cheap (walks merged map keyed by uid).
+    const perNode = collectPerNodeStats();
+
     let titles = [...proj.nodes.keys()];
     if (state.nodeFilter) {
       const f = state.nodeFilter.toLowerCase();
       titles = titles.filter(x => x.toLowerCase().includes(f));
+    }
+    if (state.statusFilter.size > 0) {
+      titles = titles.filter(x => nodePassesStatusFilter(perNode.get(x)));
     }
     titles.sort((a, b) => {
       const meta = (s) => (s === '總覽' || s === '變數紀錄') ? 1 : 0;
@@ -1145,10 +1246,44 @@
         openNote();
       });
 
+      // Final DOM order: [num] [title] [progress?] [dots?] [noteBtn]
+      // Progress + dots are present when we have stats data for this node.
       li.appendChild(num);
       li.appendChild(ttl);
+
+      const stats = perNode.get(title);
+      if (stats && stats.total > 0) {
+        const progress = document.createElement('span');
+        progress.className = 'node-progress-text';
+        progress.textContent = `${stats.translated}/${stats.total}`;
+        li.appendChild(progress);
+
+        const dots = document.createElement('span');
+        dots.className = 'node-dots';
+        const dotSpec = [
+          { cls: 'warn',   on: stats.untranslated > 0 },
+          { cls: 'info',   on: stats.edited       > 0 },
+          { cls: 'accent', on: stats.needsReview  > 0 },
+          { cls: 'good',   on: stats.approved     > 0 },
+        ];
+        for (const d of dotSpec) {
+          const dot = document.createElement('span');
+          dot.className = 'node-dot node-dot-' + d.cls + (d.on ? ' active' : '');
+          dots.appendChild(dot);
+        }
+        li.appendChild(dots);
+        li.title = t('sidebar.nodeProgress.tip', {
+          done: stats.translated,
+          total: stats.total,
+          nr: stats.needsReview,
+          ap: stats.approved,
+          ed: stats.edited,
+        });
+      } else {
+        li.title = title;
+      }
+
       li.appendChild(noteBtn);
-      li.title = title;
       li.onclick = () => navigateToNode(title);
       frag.appendChild(li);
     });
@@ -1701,10 +1836,55 @@
     if (!node) return;
 
     const header = document.createElement('div');
-    header.className = 'flat-node-title';
-    header.textContent = title;
-    view.appendChild(header);
+    header.className = 'flat-node-header';
 
+    const titleEl = document.createElement('span');
+    titleEl.className = 'flat-node-title';
+    titleEl.textContent = title;
+    header.appendChild(titleEl);
+
+    // Bulk status actions for the active node — only meaningful when the
+    // active locale is a target language (not source) and the node has
+    // translatable lines.
+    const perNodeIndex = collectPerNodeUidIndex();
+    const nodeUids = perNodeIndex.get(title);
+    const isSrc = !state.activeLocale
+      || state.activeLocale === 'en-US' || state.activeLocale === 'zh-TW'
+      || state.activeLocale === 'unknown';
+    if (!isSrc && nodeUids && nodeUids.size > 0) {
+      const actions = document.createElement('span');
+      actions.className = 'flat-node-actions';
+
+      const approveAll = document.createElement('button');
+      approveAll.type = 'button';
+      approveAll.className = 'flat-bulk-btn approve';
+      approveAll.textContent = t('tr.bulk.approveAll', { n: nodeUids.size });
+      approveAll.title = t('tr.bulk.approveAll.tip');
+      approveAll.addEventListener('click', () => {
+        if (!confirm(t('tr.bulk.confirm.approve', { n: nodeUids.size }))) return;
+        if (typeof TranslationUI !== 'undefined' && TranslationUI.bulkSetStatusForActiveLocale) {
+          TranslationUI.bulkSetStatusForActiveLocale(nodeUids, 'approved');
+        }
+      });
+      actions.appendChild(approveAll);
+
+      const clearAll = document.createElement('button');
+      clearAll.type = 'button';
+      clearAll.className = 'flat-bulk-btn clear';
+      clearAll.textContent = t('tr.bulk.clearAll', { n: nodeUids.size });
+      clearAll.title = t('tr.bulk.clearAll.tip');
+      clearAll.addEventListener('click', () => {
+        if (!confirm(t('tr.bulk.confirm.clear', { n: nodeUids.size }))) return;
+        if (typeof TranslationUI !== 'undefined' && TranslationUI.bulkSetStatusForActiveLocale) {
+          TranslationUI.bulkSetStatusForActiveLocale(nodeUids, null);
+        }
+      });
+      actions.appendChild(clearAll);
+
+      header.appendChild(actions);
+    }
+
+    view.appendChild(header);
     renderFlatStatements(view, node.statements, node);
   }
 
@@ -1921,6 +2101,130 @@
     }
     __projectUidCache.set(enEntry.project, out);
     return out;
+  }
+
+  // Per-node UID index — same walk as collectActiveProjectUids but groups by
+  // node title. Sidebar dots + per-node progress + flat-view bulk actions
+  // all consume this. Cached per-project (UID set is determined by AST,
+  // doesn't change with locale or translation state).
+  const __projectPerNodeUidCache = new WeakMap(); // project → Map<title, Set<uid>>
+  function collectPerNodeUidIndex() {
+    if (!state.activeGroup) return new Map();
+    const groupMap = state.groups.get(state.activeGroup);
+    if (!groupMap) return new Map();
+    const enEntry = groupMap.get('en-US');
+    if (!enEntry || !enEntry.project) return new Map();
+    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return new Map();
+
+    const cached = __projectPerNodeUidCache.get(enEntry.project);
+    if (cached) return cached;
+
+    const out = new Map();
+    const visit = (statements, nodeIndex, bucket) => {
+      for (const s of statements) {
+        if (s.type === 'line') {
+          const uid = TranslationUI.getUidFor(enEntry.filename, nodeIndex, s.srcLine);
+          if (uid) bucket.add(uid);
+        } else if (s.type === 'choices') {
+          for (const item of s.items) {
+            const uid = TranslationUI.getUidFor(enEntry.filename, nodeIndex, item.srcLine);
+            if (uid) bucket.add(uid);
+            if (item.body) visit(item.body, nodeIndex, bucket);
+          }
+        } else if (s.type === 'if') {
+          if (s.then) visit(s.then, nodeIndex, bucket);
+          if (s.else) visit(s.else, nodeIndex, bucket);
+        }
+      }
+    };
+
+    for (const node of enEntry.project.nodes.values()) {
+      if (!node || !node.statements) continue;
+      const bucket = new Set();
+      visit(node.statements, node.nodeIndex, bucket);
+      out.set(node.title, bucket);
+    }
+    __projectPerNodeUidCache.set(enEntry.project, out);
+    return out;
+  }
+
+  // Run per-node stats through the active locale's TranslationState. Returns
+  // Map<title, {total, translated, baselineTranslated, edited, untranslated,
+  //             needsReview, approved}>. Source locales return all-translated.
+  function collectPerNodeStats() {
+    if (typeof TranslationUI === 'undefined'
+        || !TranslationUI.perNodeStatsForActiveLocale) {
+      return new Map();
+    }
+    return TranslationUI.perNodeStatsForActiveLocale(collectPerNodeUidIndex());
+  }
+
+  function nodePassesStatusFilter(stats) {
+    if (!state.statusFilter || state.statusFilter.size === 0) return true;
+    if (!stats) return true;   // no data yet — don't hide anything
+    // OR semantics across selected filters.
+    for (const f of state.statusFilter) {
+      if (f === 'untranslated' && stats.untranslated > 0) return true;
+      if (f === 'needsReview'  && stats.needsReview  > 0) return true;
+      if (f === 'approved'     && stats.approved     > 0) return true;
+      if (f === 'done' && stats.untranslated === 0 && stats.needsReview === 0
+          && stats.total > 0) return true;
+    }
+    return false;
+  }
+
+  function toggleStatusFilter(filter) {
+    if (!filter) {
+      state.statusFilter.clear();
+    } else if (state.statusFilter.has(filter)) {
+      state.statusFilter.delete(filter);
+    } else {
+      state.statusFilter.add(filter);
+    }
+    renderStatusFilterBar();
+    refreshNodeList();
+  }
+
+  function clearStatusFilter() {
+    state.statusFilter.clear();
+    renderStatusFilterBar();
+    refreshNodeList();
+  }
+
+  function renderStatusFilterBar() {
+    const bar = $('status-filter-bar');
+    if (!bar) return;
+    bar.innerHTML = '';
+
+    const label = document.createElement('span');
+    label.className = 'status-filter-label';
+    label.textContent = t('sidebar.statusFilter.label');
+    bar.appendChild(label);
+
+    const chips = [
+      { key: null,             i18n: 'sidebar.statusFilter.all',           tip: 'sidebar.statusFilter.all.tip',           cls: 'all' },
+      { key: 'untranslated',   i18n: 'sidebar.statusFilter.untranslated',  tip: 'sidebar.statusFilter.untranslated.tip',  cls: 'warn' },
+      { key: 'needsReview',    i18n: 'sidebar.statusFilter.needsReview',   tip: 'sidebar.statusFilter.needsReview.tip',   cls: 'accent' },
+      { key: 'approved',       i18n: 'sidebar.statusFilter.approved',      tip: 'sidebar.statusFilter.approved.tip',      cls: 'good' },
+      { key: 'done',           i18n: 'sidebar.statusFilter.done',          tip: 'sidebar.statusFilter.done.tip',          cls: 'done' },
+    ];
+    const allActive = state.statusFilter.size === 0;
+    for (const c of chips) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'status-filter-chip status-filter-chip-' + c.cls;
+      const isActive = c.key === null ? allActive : state.statusFilter.has(c.key);
+      if (isActive) btn.classList.add('active');
+      const dot = document.createElement('span');
+      dot.className = 'status-filter-dot';
+      btn.appendChild(dot);
+      const lbl = document.createElement('span');
+      lbl.textContent = t(c.i18n);
+      btn.appendChild(lbl);
+      btn.title = t(c.tip);
+      btn.addEventListener('click', () => toggleStatusFilter(c.key));
+      bar.appendChild(btn);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2230,6 +2534,18 @@
         else if (status === 'baseline') td.classList.add('compare-cell-translated');
         else if (status === 'untranslated' && !isSource) {
           td.classList.add('compare-cell-untranslated');
+        }
+
+        // Tooltip explaining the visual state. Source cells use a fixed
+        // tip; non-source cells get one of 3 tips matching the class above.
+        if (isSource) {
+          td.title = t('compare.cell.tip.source');
+        } else if (status === 'override') {
+          td.title = t('compare.cell.tip.override');
+        } else if (status === 'baseline') {
+          td.title = t('compare.cell.tip.translated');
+        } else if (status === 'untranslated') {
+          td.title = t('compare.cell.tip.untranslated');
         }
 
         // Non-source cells with a UID are click-to-edit. Edits write to the
@@ -2831,8 +3147,12 @@
         applyI18n,                                    // 注入新 DOM 後重跑 i18n
         // Non-destructive redraw: refresh translation visuals on existing
         // transcript rows + pending choices. Toggling Edit Mode or saving an
-        // inline edit no longer rewinds the dialogue.
-        requestRedraw: redrawTranslationsInPlace,
+        // inline edit no longer rewinds the dialogue. Sidebar dots / counts
+        // are derived from the same translation data so refresh together.
+        requestRedraw: () => {
+          redrawTranslationsInPlace();
+          scheduleNodeListRefresh();
+        },
         // Notes round-trip hooks (export/import preserves translator notes).
         getNote: (group, title) => getNote(group, title),
         setNote: (group, title, text) => {
@@ -2863,16 +3183,28 @@
         // Translatable UID set for the active script (en-US baseline). Used
         // by the stats / progress bar to render "X / Y translated".
         getActiveProjectUids: collectActiveProjectUids,
+        // Click on a global breakdown segment → toggle the matching sidebar
+        // status filter chip (cross-component wiring so the breakdown
+        // disclosure is actionable, not just informational).
+        toggleStatusFilter,
       });
       // translation-ui.js's install just populated the modebar with the
       // Edit Mode toggle + ? button. Append the Compare button after them
       // so they sit side-by-side, then run i18n so its label localises.
       ensureCompareButtonInModebar();
+      // First-time render of the sidebar status-filter chip bar.
+      renderStatusFilterBar();
       applyI18n();
     } else {
       // No TranslationUI: still surface the Compare button (modebar is
       // otherwise empty without translation-ui).
       ensureCompareButtonInModebar();
+    }
+
+    // Re-render sidebar chips on UI language switch so labels follow the
+    // active language.
+    if (window.YP && window.YP.onLangChange) {
+      window.YP.onLangChange(() => renderStatusFilterBar());
     }
 
     // Global keyboard shortcuts (skip when typing in form fields).

@@ -11,8 +11,16 @@
 (function (global) {
   'use strict';
 
+  // 'ReviewStatus' header 名稱（case-insensitive 比對）
+  const REVIEW_STATUS_HEADER_NORM = 'reviewstatus';
+
   /**
   * 主要入口：依 source.format 自動產生 CSV 字串或 xlsx Blob。
+  * @param {object} source - LocParser.parseFile 回傳的 source 結構
+  * @param {Map<uid, text>} mergedTranslations - 要寫進譯文欄的內容
+  * @param {object} [opts]
+  * @param {Map<uid, status>} [opts.statuses] - manualStatus map;會寫進 ReviewStatus 欄
+  *                                              (找不到欄時自動 append)
   * @returns {{ filename: string, mime: string, payload: string | Blob }}
   */
   function writeLocFile(source, mergedTranslations, opts) {
@@ -20,28 +28,67 @@
     if (!source || !source.headers || !source.rows) {
       throw new Error('source 必須含有 headers + rows');
     }
-    const filledRows = applyTranslationsToRows(source, mergedTranslations);
-    const baseName = opts.suggestedName || deriveOutputName(source.fileName, source.format);
 
-    if (source.format === 'xlsx') {
+    // statuses 非空時,確保 source 裡有 ReviewStatus 欄;沒有就 append。
+    // 同時更新一份本地的 source view (不汙染呼叫端的物件)。
+    const statuses = opts.statuses;
+    let workingSource = source;
+    if (statuses && statuses.size > 0) {
+      workingSource = ensureStatusColumn(source);
+    }
+
+    const filledRows = applyTranslationsToRows(workingSource, mergedTranslations, statuses);
+    const baseName = opts.suggestedName || deriveOutputName(workingSource.fileName, workingSource.format);
+
+    if (workingSource.format === 'xlsx') {
       return {
         filename: baseName,
         mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        payload: buildXlsxBlob(source.headers, filledRows),
+        payload: buildXlsxBlob(workingSource.headers, filledRows),
       };
     }
     // 預設走 CSV
     return {
       filename: baseName,
       mime: 'text/csv;charset=utf-8',
-      payload: buildCsvText(source.headers, filledRows, source.csvHasBom),
+      payload: buildCsvText(workingSource.headers, filledRows, workingSource.csvHasBom),
     };
   }
 
+  // 確保 source.headers 含 ReviewStatus 欄,並且每 row 的長度對齊。
+  // 回傳的是 source 的 shallow copy with deep-copied headers/rows;原物件不變。
+  function ensureStatusColumn(source) {
+    const findStatusCol = (headers) => {
+      for (let i = 0; i < headers.length; i++) {
+        if (String(headers[i] || '').toLowerCase() === REVIEW_STATUS_HEADER_NORM) return i;
+      }
+      return -1;
+    };
+    const existing = findStatusCol(source.headers);
+    if (existing !== -1) {
+      return Object.assign({}, source, { statusCol: existing });
+    }
+    const headers = source.headers.slice();
+    headers.push('ReviewStatus');
+    const rows = source.rows.map(r => {
+      const c = r.slice();
+      while (c.length < headers.length) c.push('');
+      return c;
+    });
+    return Object.assign({}, source, {
+      headers,
+      rows,
+      statusCol: headers.length - 1,
+    });
+  }
+
   /**
-  * 把翻譯填回 source.rows 的 localeCol，回傳新的 rows（不修改原物件）。
+  * 把翻譯填回 source.rows 的 localeCol、把 status 填回 statusCol,回傳新的 rows
+  * （不修改原物件）。
   */
-  function applyTranslationsToRows(source, mergedTranslations) {
+  function applyTranslationsToRows(source, mergedTranslations, statuses) {
+    const statusCol = typeof source.statusCol === 'number' ? source.statusCol : -1;
+    const hasStatuses = statuses && statuses.size > 0 && statusCol !== -1;
     const out = [];
     for (const row of source.rows) {
       const r = row.slice();
@@ -50,6 +97,19 @@
         r[source.localeCol] = String(mergedTranslations.get(uid));
       }
       // 沒譯文的格子保留上傳時的內容（可能是空，可能是譯者已填的舊版）
+
+      // ReviewStatus 欄:有就覆寫,沒就清空 (確保「站內清掉狀態」也能 round-trip)
+      if (statusCol !== -1) {
+        if (hasStatuses && uid && statuses.has(uid)) {
+          r[statusCol] = String(statuses.get(uid));
+        } else if (statusCol >= row.length) {
+          // 因為 ensureStatusColumn 加欄而新出現的格子,預設空白
+          r[statusCol] = '';
+        } else {
+          // 既有欄但這 uid 已沒狀態 → 清空,避免殘留
+          r[statusCol] = '';
+        }
+      }
       out.push(r);
     }
     return out;

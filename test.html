@@ -462,10 +462,156 @@
     const s = TranslationState.createState(loc);
     s.replaceBaseline(new Map([['u1', 'a']]), {});
     s.setOverride('u2', 'b');
+    s.setStatus('u1', 'approved');
     s.reset();
     assertEq(s.get('u1'), undefined);
     assertEq(s.get('u2'), undefined);
+    assertEq(s.getStatus('u1'), null);
     assertEq(localStorage.getItem('yp.translation.' + loc), null);
+  });
+
+  // ----- manualStatus -----
+
+  test('setStatus stores valid statuses + persists', () => {
+    const loc = ephemeralLocale('st-set');
+    const s = TranslationState.createState(loc);
+    assertEq(s.setStatus('u1', 'needs-review'), 'ok');
+    assertEq(s.setStatus('u2', 'approved'), 'ok');
+    assertEq(s.getStatus('u1'), 'needs-review');
+    assertEq(s.getStatus('u2'), 'approved');
+    // Reload from localStorage and verify durability.
+    const s2 = TranslationState.createState(loc);
+    assertEq(s2.getStatus('u1'), 'needs-review');
+    assertEq(s2.getStatus('u2'), 'approved');
+  });
+
+  test('setStatus null/empty/unknown clears entry', () => {
+    const loc = ephemeralLocale('st-clear');
+    const s = TranslationState.createState(loc);
+    s.setStatus('u1', 'needs-review');
+    s.setStatus('u1', null);
+    assertEq(s.getStatus('u1'), null);
+    s.setStatus('u1', 'approved');
+    s.setStatus('u1', '');
+    assertEq(s.getStatus('u1'), null);
+    s.setStatus('u1', 'approved');
+    s.setStatus('u1', 'something-bogus');     // unknown → clear
+    assertEq(s.getStatus('u1'), null);
+  });
+
+  test('bulkSetStatus writes many uids in one persist', () => {
+    const loc = ephemeralLocale('st-bulk');
+    const s = TranslationState.createState(loc);
+    let writes = 0;
+    const orig = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (...args) {
+      if (args[0] === 'yp.translation.' + loc) writes++;
+      return orig.apply(this, args);
+    };
+    try {
+      s.bulkSetStatus(['u1', 'u2', 'u3'], 'approved');
+    } finally {
+      Storage.prototype.setItem = orig;
+    }
+    assertEq(s.getStatus('u1'), 'approved');
+    assertEq(s.getStatus('u2'), 'approved');
+    assertEq(s.getStatus('u3'), 'approved');
+    assertEq(writes, 1);
+  });
+
+  test('bulkSetStatus accepts Map<uid, status> for mixed values', () => {
+    const loc = ephemeralLocale('st-bulk-map');
+    const s = TranslationState.createState(loc);
+    let writes = 0;
+    const orig = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (...args) {
+      if (args[0] === 'yp.translation.' + loc) writes++;
+      return orig.apply(this, args);
+    };
+    try {
+      s.bulkSetStatus(new Map([
+        ['u1', 'approved'],
+        ['u2', 'needs-review'],
+        ['u3', 'bogus-value'],   // unknown → clears (no-op since u3 not set)
+      ]));
+    } finally {
+      Storage.prototype.setItem = orig;
+    }
+    assertEq(s.getStatus('u1'), 'approved');
+    assertEq(s.getStatus('u2'), 'needs-review');
+    assertEq(s.getStatus('u3'), null);
+    assertEq(writes, 1);
+  });
+
+  test('bulkSetStatus null clears uids in one persist', () => {
+    const loc = ephemeralLocale('st-bulk-clr');
+    const s = TranslationState.createState(loc);
+    s.setStatus('u1', 'needs-review');
+    s.setStatus('u2', 'approved');
+    s.bulkSetStatus(['u1', 'u2'], null);
+    assertEq(s.getStatus('u1'), null);
+    assertEq(s.getStatus('u2'), null);
+  });
+
+  test('replaceBaseline clears manualStatus by default', () => {
+    const loc = ephemeralLocale('st-repl');
+    const s = TranslationState.createState(loc);
+    s.setStatus('u1', 'approved');
+    s.replaceBaseline(new Map([['u1', 'imported']]), {});
+    assertEq(s.getStatus('u1'), null);
+  });
+
+  test('replaceBaseline preserveOverrides keeps manualStatus', () => {
+    const loc = ephemeralLocale('st-pres');
+    const s = TranslationState.createState(loc);
+    s.setStatus('u1', 'approved');
+    s.replaceBaseline(new Map([['u1', 'imported']]), {}, { preserveOverrides: true });
+    assertEq(s.getStatus('u1'), 'approved');
+  });
+
+  test('setOverride does NOT touch manualStatus', () => {
+    const loc = ephemeralLocale('st-ov');
+    const s = TranslationState.createState(loc);
+    s.setStatus('u1', 'needs-review');
+    s.setOverride('u1', 'new text');
+    assertEq(s.getStatus('u1'), 'needs-review');
+  });
+
+  test('stats includes needsReviewCount + approvedCount', () => {
+    const loc = ephemeralLocale('st-stats');
+    const s = TranslationState.createState(loc);
+    s.setStatus('u1', 'needs-review');
+    s.setStatus('u2', 'needs-review');
+    s.setStatus('u3', 'approved');
+    const st = s.stats();
+    assertEq(st.needsReviewCount, 2);
+    assertEq(st.approvedCount, 1);
+    assertEq(st.manualStatusCount, 3);
+  });
+
+  test('STORAGE_VERSION 4 ignores v3 payload (no migration)', () => {
+    const loc = ephemeralLocale('vermis2');
+    const k = 'yp.translation.' + loc;
+    // Simulate a v3-format payload (no manualStatus field).
+    localStorage.setItem(k, JSON.stringify({
+      v: 3,
+      baseline: [['u1', 'old']],
+      overrides: [],
+    }));
+    const s = TranslationState.createState(loc);
+    assertEq(s.get('u1'), undefined);
+    assertEq(s.getStatus('u1'), null);
+  });
+
+  test('getStatusMap returns a snapshot copy', () => {
+    const loc = ephemeralLocale('st-snap');
+    const s = TranslationState.createState(loc);
+    s.setStatus('u1', 'approved');
+    const m = s.getStatusMap();
+    assertEq(m.get('u1'), 'approved');
+    m.delete('u1');
+    // Modifying the returned map must NOT mutate internal state.
+    assertEq(s.getStatus('u1'), 'approved');
   });
 
   // ============================================================
@@ -533,6 +679,59 @@
     await assertThrowsAsync(() => LocParser.parseFile(f, 'fr-FR'));
   });
 
+  test('CSV with ReviewStatus column populates statuses Map', async () => {
+    const csv = 'Type,en-US,fr-FR,ID,ReviewStatus\n'
+              + 'Dialogue,Hello,Bonjour,uid-1,approved\n'
+              + 'Dialogue,Hi,Salut,uid-2,needs-review\n'
+              + 'Dialogue,Bye,Adieu,uid-3,\n';
+    const f = new File([csv], 'test.csv');
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.statuses.size, 2);
+    assertEq(r.statuses.get('uid-1'), 'approved');
+    assertEq(r.statuses.get('uid-2'), 'needs-review');
+    assertEq(r.stats.hasStatusColumn, true);
+    assertEq(r.stats.statusCount, 2);
+    assertEq(r.source.statusCol, 4);
+  });
+
+  test('CSV without ReviewStatus column returns empty statuses + statusCol -1', async () => {
+    const csv = 'Type,en-US,fr-FR,ID\nDialogue,Hello,Bonjour,uid-1\n';
+    const f = new File([csv], 'test.csv');
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.statuses.size, 0);
+    assertEq(r.stats.hasStatusColumn, false);
+    assertEq(r.source.statusCol, -1);
+  });
+
+  test('CSV ReviewStatus unknown value warns + ignores (no throw)', async () => {
+    const csv = 'Type,en-US,fr-FR,ID,ReviewStatus\nDialogue,Hi,Salut,uid-1,bogus-status\n';
+    const f = new File([csv], 'test.csv');
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.statuses.size, 0);
+    assertEq(r.stats.badStatusCount, 1);
+    assert(r.warnings.some(w => w.includes('bogus-status')),
+      'expected warning about bogus-status, got: ' + JSON.stringify(r.warnings));
+  });
+
+  test('CSV ReviewStatus values are case-insensitive', async () => {
+    const csv = 'Type,en-US,fr-FR,ID,ReviewStatus\n'
+              + 'Dialogue,Hi,Salut,uid-1,APPROVED\n'
+              + 'Dialogue,Bye,Adieu,uid-2,Needs-Review\n';
+    const f = new File([csv], 'test.csv');
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.statuses.get('uid-1'), 'approved');
+    assertEq(r.statuses.get('uid-2'), 'needs-review');
+  });
+
+  test('CSV ReviewStatus recognized when text cell is empty (uid still tracked)', async () => {
+    const csv = 'Type,en-US,fr-FR,ID,ReviewStatus\n'
+              + 'Dialogue,Hi,,uid-1,needs-review\n';
+    const f = new File([csv], 'test.csv');
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.translations.size, 0);   // empty translation cell skipped
+    assertEq(r.statuses.get('uid-1'), 'needs-review');   // status still set
+  });
+
   // ============================================================
   //  loc-writer.js
   // ============================================================
@@ -583,6 +782,84 @@
   test('writeLocFile rejects malformed source', () => {
     assertThrows(() => LocWriter.writeLocFile({ rows: [] }, new Map(), {}));
     assertThrows(() => LocWriter.writeLocFile(null, new Map(), {}));
+  });
+
+  test('writeLocFile auto-appends ReviewStatus column when statuses given', () => {
+    const source = {
+      format: 'csv', fileName: 'in.csv',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID'],
+      rows: [['Dialogue', 'Hi', '', 'uid-1']],
+      idCol: 3, localeCol: 2, csvHasBom: false,
+    };
+    const merged = new Map([['uid-1', 'Salut']]);
+    const statuses = new Map([['uid-1', 'approved']]);
+    const out = LocWriter.writeLocFile(source, merged, { statuses });
+    assert(out.payload.includes('ReviewStatus'),
+      'expected ReviewStatus in header, got: ' + out.payload);
+    assert(out.payload.includes('approved'),
+      'expected approved value, got: ' + out.payload);
+  });
+
+  test('writeLocFile reuses existing ReviewStatus column (no duplicate)', () => {
+    const source = {
+      format: 'csv', fileName: 'in.csv',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID', 'ReviewStatus'],
+      rows: [['Dialogue', 'Hi', '', 'uid-1', '']],
+      idCol: 3, localeCol: 2, statusCol: 4, csvHasBom: false,
+    };
+    const merged = new Map([['uid-1', 'Salut']]);
+    const statuses = new Map([['uid-1', 'needs-review']]);
+    const out = LocWriter.writeLocFile(source, merged, { statuses });
+    // Should not be a duplicate header column.
+    const headerLine = out.payload.split('\r\n')[0];
+    const matches = headerLine.split(',').filter(h => h.toLowerCase() === 'reviewstatus');
+    assertEq(matches.length, 1);
+    assert(out.payload.includes('needs-review'),
+      'expected needs-review value, got: ' + out.payload);
+  });
+
+  test('writeLocFile clears empty status (no stale residue) for uids removed from statuses', () => {
+    const source = {
+      format: 'csv', fileName: 'in.csv',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID', 'ReviewStatus'],
+      rows: [
+        ['Dialogue', 'Hi', '', 'uid-1', 'approved'],     // already had a status in source
+        ['Dialogue', 'Bye', '', 'uid-2', 'needs-review'],
+      ],
+      idCol: 3, localeCol: 2, statusCol: 4, csvHasBom: false,
+    };
+    const merged = new Map();
+    // Only uid-1 still has a status; uid-2's stale "needs-review" should be wiped.
+    const statuses = new Map([['uid-1', 'approved']]);
+    const out = LocWriter.writeLocFile(source, merged, { statuses });
+    const lines = out.payload.split('\r\n').filter(l => l);
+    // Find the uid-2 row
+    const uid2Row = lines.find(l => l.includes('uid-2'));
+    assert(uid2Row && !uid2Row.includes('needs-review'),
+      'uid-2 stale status should be cleared, got: ' + uid2Row);
+  });
+
+  test('write + parse round-trip preserves statuses', async () => {
+    const source = {
+      format: 'csv', fileName: 'in.csv',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID'],
+      rows: [
+        ['Dialogue', 'Hello', '', 'uid-1'],
+        ['Dialogue', 'Goodbye', '', 'uid-2'],
+        ['Dialogue', 'Yes', '', 'uid-3'],
+      ],
+      idCol: 3, localeCol: 2, csvHasBom: true,
+    };
+    const merged = new Map([['uid-1', 'Bonjour'], ['uid-2', 'Adieu'], ['uid-3', 'Oui']]);
+    const statuses = new Map([['uid-1', 'approved'], ['uid-2', 'needs-review']]);
+    const out = LocWriter.writeLocFile(source, merged, { statuses });
+    const f = new File([out.payload], out.filename);
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.translations.get('uid-1'), 'Bonjour');
+    assertEq(r.translations.get('uid-2'), 'Adieu');
+    assertEq(r.statuses.get('uid-1'), 'approved');
+    assertEq(r.statuses.get('uid-2'), 'needs-review');
+    assertEq(r.statuses.has('uid-3'), false);   // no status was set
   });
 
   // ============================================================

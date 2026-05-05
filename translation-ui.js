@@ -1,5 +1,6 @@
 // translation-ui.js
 // 翻譯編輯模式：上傳 CSV/xlsx → 預覽即時切換 → 站內 inline 編輯 → 下載同格式
+// 同時管理 review status (needs-review / approved) 的顯示與互動。
 //
 // 整合到既有 DialoguePreviewer 的方式：
 //   - ui.js 暴露 hooks（在 init 時呼叫 install）；本檔不直接讀 ui.js 的 state
@@ -20,9 +21,16 @@
     ready: false,
     translationMode: false,
     hooks: null,
+    progressExpanded: false,         // global progress breakdown disclosure
   };
 
   let loadingPromise = null;
+
+  // Singleton popup element for the status chip menu (created lazily).
+  let statusMenuEl = null;
+  // Track outside-click / Esc listeners attached when menu is open so we can
+  // detach them on close (avoid leaking a listener per open).
+  let statusMenuCleanup = null;
 
   function t(key, params) {
     if (STATE.hooks && STATE.hooks.t) return STATE.hooks.t(key, params);
@@ -39,8 +47,20 @@
     injectToolbar();
     ensureLoaded();
     // 初始 stats 顯示
+    loadProgressDisclosurePref();
     updateStats();
     refreshExportStatus();
+  }
+
+  function loadProgressDisclosurePref() {
+    try {
+      STATE.progressExpanded = localStorage.getItem('yp.progressExpanded') === '1';
+    } catch (_) { STATE.progressExpanded = false; }
+  }
+
+  function setProgressDisclosurePref(expanded) {
+    STATE.progressExpanded = !!expanded;
+    try { localStorage.setItem('yp.progressExpanded', expanded ? '1' : '0'); } catch (_) {}
   }
 
   async function ensureLoaded() {
@@ -152,6 +172,16 @@
       help.addEventListener('click', openEditModeHelp);
       modebar.appendChild(help);
     }
+
+    // Wire global progress disclosure toggle (chevron in #t-progress).
+    // The chevron sits inside index.html's #t-progress block — bind once.
+    const discl = document.getElementById('t-prog-toggle');
+    if (discl) {
+      discl.addEventListener('click', () => {
+        setProgressDisclosurePref(!STATE.progressExpanded);
+        renderBreakdownVisibility();
+      });
+    }
   }
 
   // ----- Dedicated Edit Mode help modal -----
@@ -258,7 +288,7 @@
 
     const ts = getOrCreateState(activeLocale);
     const before = ts.stats();
-    if (before.baselineCount > 0 || before.overrideCount > 0) {
+    if (before.baselineCount > 0 || before.overrideCount > 0 || before.manualStatusCount > 0) {
       const overrideWarn = before.overrideCount > 0
         ? t('tr.confirm.replaceOverrideWarn', { o: before.overrideCount, locale: activeLocale })
         : '';
@@ -313,6 +343,15 @@
       return;
     }
 
+    // ReviewStatus restore happens after baseline is persisted (same reason
+    // as notes: don't outlive translations across refresh). replaceBaseline
+    // already cleared manualStatus so we just write the new map.
+    let statusesRestored = 0;
+    if (parsed.statuses && parsed.statuses.size > 0) {
+      ts.bulkSetStatus(parsed.statuses);
+      statusesRestored = parsed.statuses.size;
+    }
+
     // Notes restore happens only after baseline is durably persisted —
     // avoids the "notes saved but translations vanished on refresh" bug.
     let notesRestored = 0;
@@ -337,13 +376,16 @@
     const notesLine = notesRestored
       ? t('tr.alert.notesRestored', { n: notesRestored })
       : '';
+    const statusLine = statusesRestored
+      ? t('tr.alert.statusesRestored', { n: statusesRestored })
+      : '';
     alert(t('tr.alert.loaded', {
       locale: activeLocale,
       file: parsed.stats.sourceFile,
       total: parsed.stats.totalRows,
       translated: parsed.stats.withTranslation,
       missing: parsed.stats.missingUid,
-    }) + notesLine + warningSummary);
+    }) + notesLine + statusLine + warningSummary);
 
     // Both display-refresh paths are isolated — a thrown updateStats
     // (e.g. en-US not loaded for the active script yet) must not block
@@ -363,8 +405,8 @@
       return;
     }
     const ts = getOrCreateState(activeLocale);
-    const s = ts ? ts.stats() : { baselineCount: 0, overrideCount: 0 };
-    if (s.baselineCount === 0 && s.overrideCount === 0) {
+    const s = ts ? ts.stats() : { baselineCount: 0, overrideCount: 0, manualStatusCount: 0 };
+    if (s.baselineCount === 0 && s.overrideCount === 0 && s.manualStatusCount === 0) {
       alert(t('tr.alert.resetEmpty', { locale: activeLocale }));
       return;
     }
@@ -438,7 +480,7 @@
     try { refreshExportStatus(); } catch (e) {}
   }, 30 * 1000);
 
-  // ----- Stats display -----
+  // ----- Stats display + global breakdown -----
 
   function updateStats() {
     const el = document.getElementById('t-stats');
@@ -451,7 +493,10 @@
     // Reset progress before any early return so a stale bar doesn't linger
     // when we switch into "no locale" / "not loaded" states.
     const noStats = !activeLocale || !total;
-    if (noStats) updateProgress(0, 0);
+    if (noStats) {
+      updateProgress(0, 0, null);
+      renderProgressBreakdown(null);
+    }
 
     if (!activeLocale) {
       el.textContent = t('tr.stats.noLocale');
@@ -462,12 +507,33 @@
     const s = ts ? ts.stats() : null;
     const isSrc = isSourceLocale(activeLocale);
 
+    // Aggregate breakdown across the active project's UID set:
+    //   untranslated / baselineTranslated / edited (orthogonal axis)
+    //   needsReview / approved              (manual status, orthogonal)
     let done = 0;
+    let breakdown = null;
     if (ts && total) {
+      breakdown = {
+        total,
+        untranslated: 0,
+        baselineTranslated: 0,
+        edited: 0,
+        needsReview: 0,
+        approved: 0,
+      };
       const merged = ts.buildMergedMap();
       for (const uid of projUids) {
         const v = merged.get(uid);
-        if (v != null && v !== '') done++;
+        if (v != null && v !== '') {
+          done++;
+          if (ts.source(uid) === 'override') breakdown.edited++;
+          else breakdown.baselineTranslated++;
+        } else {
+          breakdown.untranslated++;
+        }
+        const st = ts.getStatus(uid);
+        if (st === 'needs-review') breakdown.needsReview++;
+        else if (st === 'approved') breakdown.approved++;
       }
     }
     // Source locales (en-US / zh-TW) are authored, not translated — they
@@ -485,28 +551,112 @@
         file.textContent = t('tr.stats.loadedFile', { file: s.sourceMeta.fileName });
         el.appendChild(file);
       }
-      updateProgress(done, total);
+      updateProgress(done, total, isSrc ? null : breakdown);
+      renderProgressBreakdown(isSrc ? null : breakdown);
       el.classList.toggle('has-untranslated', !isSrc && done < total);
     } else {
       el.textContent = t('tr.stats.notLoaded', { locale: activeLocale });
       el.classList.remove('has-untranslated');
+      renderProgressBreakdown(null);
     }
   }
 
-  function updateProgress(done, total) {
+  function updateProgress(done, total, breakdown) {
     const wrap   = document.getElementById('t-progress');
     const dEl    = document.getElementById('t-prog-done');
     const tEl    = document.getElementById('t-prog-total');
     const fillEl = document.getElementById('t-prog-fill');
     const pctEl  = document.getElementById('t-prog-pct');
+    const tog    = document.getElementById('t-prog-toggle');
     if (!wrap) return;
-    if (!total) { wrap.hidden = true; return; }
+    if (!total) {
+      wrap.hidden = true;
+      if (tog) tog.hidden = true;
+      return;
+    }
     wrap.hidden = false;
     if (dEl) dEl.textContent = String(done);
     if (tEl) tEl.textContent = String(total);
     const pct = Math.round((done / total) * 100);
     if (fillEl) fillEl.style.width = pct + '%';
     if (pctEl) pctEl.textContent = pct + '%';
+    // Toggle is only meaningful when there's a breakdown to show.
+    if (tog) {
+      tog.hidden = !breakdown;
+      tog.setAttribute('aria-expanded', STATE.progressExpanded ? 'true' : 'false');
+      tog.title = t(STATE.progressExpanded
+        ? 'tr.progress.disclosure.collapse'
+        : 'tr.progress.disclosure.expand');
+      tog.textContent = STATE.progressExpanded ? '▲' : '▼';
+    }
+  }
+
+  function renderProgressBreakdown(breakdown) {
+    const el = document.getElementById('t-progress-breakdown');
+    if (!el) return;
+    el.innerHTML = '';
+    if (!breakdown) {
+      el.hidden = true;
+      return;
+    }
+    // Five segments — order matches sidebar dot order + reading priority.
+    const segments = [
+      { key: 'untranslated', count: breakdown.untranslated,
+        i18n: 'tr.progress.breakdown.untranslated', cls: 'warn',
+        filter: 'untranslated' },
+      { key: 'edited', count: breakdown.edited,
+        i18n: 'tr.progress.breakdown.edited', cls: 'info',
+        filter: null },
+      { key: 'needsReview', count: breakdown.needsReview,
+        i18n: 'tr.progress.breakdown.needsReview', cls: 'accent',
+        filter: 'needsReview' },
+      { key: 'approved', count: breakdown.approved,
+        i18n: 'tr.progress.breakdown.approved', cls: 'good',
+        filter: 'approved' },
+      { key: 'cleanBaseline', count: breakdown.baselineTranslated,
+        i18n: 'tr.progress.breakdown.cleanBaseline', cls: 'neutral',
+        filter: null },
+    ];
+    for (const seg of segments) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 't-bd-item t-bd-' + seg.cls;
+      if (!seg.filter) item.classList.add('t-bd-static');
+      const dot = document.createElement('span');
+      dot.className = 't-bd-dot';
+      const label = document.createElement('span');
+      label.className = 't-bd-label';
+      label.textContent = t(seg.i18n, { n: seg.count });
+      item.appendChild(dot);
+      item.appendChild(label);
+      if (seg.filter) {
+        item.title = t('tr.progress.breakdown.filterTip');
+        item.addEventListener('click', () => {
+          if (STATE.hooks && STATE.hooks.toggleStatusFilter) {
+            STATE.hooks.toggleStatusFilter(seg.filter);
+          }
+        });
+      } else {
+        item.disabled = true;
+      }
+      el.appendChild(item);
+    }
+    renderBreakdownVisibility();
+  }
+
+  function renderBreakdownVisibility() {
+    const el = document.getElementById('t-progress-breakdown');
+    if (!el) return;
+    if (!el.children.length) { el.hidden = true; return; }
+    el.hidden = !STATE.progressExpanded;
+    const tog = document.getElementById('t-prog-toggle');
+    if (tog) {
+      tog.setAttribute('aria-expanded', STATE.progressExpanded ? 'true' : 'false');
+      tog.textContent = STATE.progressExpanded ? '▲' : '▼';
+      tog.title = t(STATE.progressExpanded
+        ? 'tr.progress.disclosure.collapse'
+        : 'tr.progress.disclosure.expand');
+    }
   }
 
   // ----- Translation lookup（給 transcript 渲染用） -----
@@ -548,6 +698,195 @@
       openInlineEditor(rowEl, info.uid, info.text);
     });
     rowEl.appendChild(editBtn);
+
+    // Manual review status chip (always-open menu — single click opens
+    // the menu, no left-click cycling).
+    appendStatusChip(rowEl, info.uid);
+  }
+
+  function appendStatusChip(rowEl, uid) {
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale || isSourceLocale(activeLocale)) return;
+    const ts = getOrCreateState(activeLocale);
+    if (!ts) return;
+    const status = ts.getStatus(uid);
+
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 't-status-chip';
+    chip.dataset.tUidStatus = uid;
+    if (status === 'needs-review') chip.classList.add('needs-review');
+    else if (status === 'approved') chip.classList.add('approved');
+    else chip.classList.add('empty');
+
+    const dot = document.createElement('span');
+    dot.className = 't-status-chip-dot';
+    chip.appendChild(dot);
+
+    const label = document.createElement('span');
+    label.className = 't-status-chip-label';
+    label.textContent = chipLabelFor(status);
+    chip.appendChild(label);
+
+    chip.title = t(status
+      ? 'tr.statusChip.tip'
+      : 'tr.statusChip.empty.tip');
+
+    chip.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      openStatusMenu(chip, uid);
+    });
+    rowEl.appendChild(chip);
+  }
+
+  function chipLabelFor(status) {
+    if (status === 'needs-review') return t('status.needsReview');
+    if (status === 'approved') return t('status.approved');
+    return t('tr.statusChip.empty.label');
+  }
+
+  // ----- Status menu (always-open popup) -----
+
+  function ensureStatusMenu() {
+    if (statusMenuEl) return statusMenuEl;
+    const m = document.createElement('div');
+    m.className = 't-status-menu';
+    m.setAttribute('role', 'menu');
+    m.hidden = true;
+    document.body.appendChild(m);
+    statusMenuEl = m;
+    return m;
+  }
+
+  function closeStatusMenu() {
+    if (!statusMenuEl) return;
+    statusMenuEl.hidden = true;
+    statusMenuEl.innerHTML = '';
+    statusMenuEl.removeAttribute('data-uid');
+    if (statusMenuCleanup) {
+      statusMenuCleanup();
+      statusMenuCleanup = null;
+    }
+  }
+
+  function openStatusMenu(anchor, uid) {
+    const menu = ensureStatusMenu();
+    // If menu's already open against this anchor, treat as toggle.
+    if (!menu.hidden && menu.dataset.uid === uid) {
+      closeStatusMenu();
+      return;
+    }
+    closeStatusMenu();
+    menu.dataset.uid = uid;
+
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale || isSourceLocale(activeLocale)) return;
+    const ts = getOrCreateState(activeLocale);
+    if (!ts) return;
+    const cur = ts.getStatus(uid);
+
+    const items = [
+      { value: null,             i18n: 'tr.statusChip.menu.clear',       cls: 'clear' },
+      { value: 'needs-review',   i18n: 'tr.statusChip.menu.needsReview', cls: 'needs-review' },
+      { value: 'approved',       i18n: 'tr.statusChip.menu.approved',    cls: 'approved' },
+    ];
+    for (const it of items) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 't-status-menu-item ' + it.cls;
+      if (cur === it.value || (cur == null && it.value == null)) {
+        btn.classList.add('active');
+      }
+      const dot = document.createElement('span');
+      dot.className = 't-status-menu-dot';
+      btn.appendChild(dot);
+      const lbl = document.createElement('span');
+      lbl.textContent = t(it.i18n);
+      btn.appendChild(lbl);
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        applyStatusChange(uid, it.value);
+        closeStatusMenu();
+      });
+      menu.appendChild(btn);
+    }
+
+    // Position below the anchor (clamp into viewport).
+    const r = anchor.getBoundingClientRect();
+    menu.hidden = false;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // Reset before measure so prior positioning doesn't bias offsetWidth.
+    menu.style.left = '0px';
+    menu.style.top  = '0px';
+    const mw = menu.offsetWidth;
+    const mh = menu.offsetHeight;
+    let left = r.left + window.scrollX;
+    let top  = r.bottom + 4 + window.scrollY;
+    if (left + mw > vw - 8) left = Math.max(8, vw - mw - 8);
+    if (r.bottom + mh + 8 > vh && r.top - mh - 4 > 8) {
+      top = r.top - mh - 4 + window.scrollY;
+    }
+    menu.style.left = left + 'px';
+    menu.style.top  = top + 'px';
+
+    // Outside-click + Esc close.
+    const onDocClick = (ev) => {
+      if (menu.contains(ev.target)) return;
+      if (anchor.contains(ev.target)) return;
+      closeStatusMenu();
+    };
+    const onKey = (ev) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); closeStatusMenu(); }
+    };
+    // Defer doc-click attach so the click that opened the menu doesn't
+    // immediately close it (event still bubbling).
+    setTimeout(() => document.addEventListener('click', onDocClick, true), 0);
+    document.addEventListener('keydown', onKey);
+    statusMenuCleanup = () => {
+      document.removeEventListener('click', onDocClick, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }
+
+  function applyStatusChange(uid, status) {
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale || isSourceLocale(activeLocale)) return;
+    const ts = getOrCreateState(activeLocale);
+    if (!ts) return;
+    const persistResult = ts.setStatus(uid, status);
+    if (persistResult !== 'ok') {
+      alert(t('tr.alert.persistFailed', { locale: activeLocale, file: '(status change)' }));
+      return;
+    }
+    if (STATE.hooks && STATE.hooks.markEditDirty) STATE.hooks.markEditDirty();
+    try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
+    if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+  }
+
+  // Bulk: apply status to a list of UIDs in the active locale (used by
+  // flat-view node header). status = null clears.
+  function bulkSetStatusForActiveLocale(uids, status) {
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale || isSourceLocale(activeLocale)) return 'no-locale';
+    const ts = getOrCreateState(activeLocale);
+    if (!ts) return 'no-state';
+    const persistResult = ts.bulkSetStatus(uids, status);
+    if (persistResult !== 'ok') {
+      alert(t('tr.alert.persistFailed', { locale: activeLocale, file: '(bulk status change)' }));
+      return persistResult;
+    }
+    if (STATE.hooks && STATE.hooks.markEditDirty) STATE.hooks.markEditDirty();
+    try { updateStats(); } catch (e) { console.error('[updateStats]', e); }
+    if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
+    return 'ok';
+  }
+
+  function getStatusForActiveLocale(uid) {
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale || isSourceLocale(activeLocale)) return null;
+    const ts = getOrCreateState(activeLocale);
+    return ts ? ts.getStatus(uid) : null;
   }
 
   function openInlineEditor(rowEl, uid, currentText) {
@@ -633,9 +972,9 @@
     // AST so they can still download their progress.
     let source = ts ? ts.getSource() : null;
     if (source) {
-      // Add FileName / NodeTitle / Notes columns so translator notes
-      // travel with the export. No-op when the source already has them
-      // and notes are empty.
+      // Add FileName / NodeTitle / Notes / ReviewStatus columns so notes
+      // and statuses travel with the export. No-op when the source already
+      // has them and the relevant data is empty.
       source = augmentSourceForExport(source);
     } else {
       source = buildSyntheticSource(activeLocale);
@@ -643,7 +982,8 @@
     }
     try {
       const merged = ts ? ts.buildMergedMap() : new Map();
-      const result = LocWriter.writeLocFile(source, merged, {});
+      const statuses = ts ? ts.getStatusMap() : new Map();
+      const result = LocWriter.writeLocFile(source, merged, { statuses });
       const blob = result.payload instanceof Blob
         ? result.payload
         : new Blob([result.payload], { type: result.mime });
@@ -656,18 +996,18 @@
   }
 
   // Build the v2 LocKit-style CSV (Type, Gender, CharacterName, en-US,
-  // {locale}, ID, FileName, NodeTitle, Notes) by re-running
+  // {locale}, ID, FileName, NodeTitle, Notes, ReviewStatus) by re-running
   // YarnConverter.buildSO on every loaded en-US project — same code path
   // Unity v2 uses, so the file is import-ready. The trailing FileName /
-  // NodeTitle / Notes columns let translator notes round-trip across
-  // browsers and machines (Unity's parser locates columns by header name
-  // and ignores unknown extras).
+  // NodeTitle / Notes / ReviewStatus columns let translator notes and
+  // review states round-trip across browsers and machines (Unity's parser
+  // locates columns by header name and ignores unknown extras).
   function buildSyntheticSource(targetLocale) {
     if (!STATE.hooks || !STATE.hooks.getAllGroups || !STATE.hooks.getEntry) return null;
     if (!STATE.guids) return null;
     if (typeof YarnConverter === 'undefined') return null;
 
-    const headers = ['Type', 'Gender', 'CharacterName', 'en-US', targetLocale, 'ID', 'FileName', 'NodeTitle', 'Notes'];
+    const headers = ['Type', 'Gender', 'CharacterName', 'en-US', targetLocale, 'ID', 'FileName', 'NodeTitle', 'Notes', 'ReviewStatus'];
     const rows = [];
     const charCtx = {
       characterKeys: STATE.characterKeys || {},
@@ -706,6 +1046,7 @@
             enEntry.filename,
             node.title,
             firstRow ? noteText : '',
+            '',   // ReviewStatus — populated by writer from the statuses map
           ]);
           firstRow = false;
         }
@@ -720,14 +1061,15 @@
       rows,
       idCol: 5,
       localeCol: 4,
+      statusCol: 9,
       csvHasBom: true,
     };
   }
 
   // Augment an uploaded source structure (whatever shape the user gave us)
-  // with FileName / NodeTitle / Notes columns so notes round-trip even when
-  // the original file didn't carry them. No-op when the original already
-  // has every column we'd add.
+  // with FileName / NodeTitle / Notes / ReviewStatus columns so notes and
+  // statuses round-trip even when the original file didn't carry them.
+  // No-op when the original already has every column we'd add.
   function augmentSourceForExport(source) {
     if (!source || !STATE.hooks || !STATE.hooks.getNote) return source;
     const out = {
@@ -737,6 +1079,7 @@
       rows:      source.rows.map(r => r.slice()),
       idCol:     source.idCol,
       localeCol: source.localeCol,
+      statusCol: typeof source.statusCol === 'number' ? source.statusCol : -1,
       csvHasBom: source.csvHasBom,
     };
 
@@ -762,6 +1105,8 @@
     const fileCol  = ensureCol('FileName');
     const nodeCol  = ensureCol('NodeTitle');
     const notesCol = ensureCol('Notes');
+    const statusCol = ensureCol('ReviewStatus');
+    out.statusCol = statusCol;
 
     // Reverse map: guid → {filename, group, project}
     const guidLookup = {};
@@ -936,6 +1281,62 @@
     }
   }
 
+  // Per-node stats helper used by the sidebar dot/count rendering. ui.js
+  // owns the per-node UID index (it knows the active project's AST); we
+  // overlay the per-locale TranslationState on top to get the breakdown.
+  function perNodeStatsForActiveLocale(perNodeUidIndex) {
+    const out = new Map();
+    if (!perNodeUidIndex) return out;
+    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!activeLocale) return out;
+    if (isSourceLocale(activeLocale)) {
+      // Source locales: every line is "translated" by definition,
+      // no untranslated, no review status.
+      for (const [title, uids] of perNodeUidIndex) {
+        out.set(title, {
+          total: uids.size,
+          translated: uids.size,
+          baselineTranslated: uids.size,
+          edited: 0,
+          untranslated: 0,
+          needsReview: 0,
+          approved: 0,
+        });
+      }
+      return out;
+    }
+    const ts = getOrCreateState(activeLocale);
+    if (!ts) return out;
+    const merged = ts.buildMergedMap();
+    for (const [title, uids] of perNodeUidIndex) {
+      let translated = 0, baselineTranslated = 0, edited = 0, untranslated = 0;
+      let needsReview = 0, approved = 0;
+      for (const uid of uids) {
+        const v = merged.get(uid);
+        if (v != null && v !== '') {
+          translated++;
+          if (ts.source(uid) === 'override') edited++;
+          else baselineTranslated++;
+        } else {
+          untranslated++;
+        }
+        const st = ts.getStatus(uid);
+        if (st === 'needs-review') needsReview++;
+        else if (st === 'approved') approved++;
+      }
+      out.set(title, {
+        total: uids.size,
+        translated,
+        baselineTranslated,
+        edited,
+        untranslated,
+        needsReview,
+        approved,
+      });
+    }
+    return out;
+  }
+
   global.TranslationUI = {
     install,
     lookupLine,
@@ -949,5 +1350,10 @@
     notifyContextChange: () => updateStats(),
     isActive: () => STATE.translationMode,
     refreshExportStatus,
+    // Status-related public API consumed by ui.js (sidebar, flat-view header).
+    bulkSetStatusForActiveLocale,
+    getStatusForActiveLocale,
+    perNodeStatsForActiveLocale,
+    closeStatusMenu,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

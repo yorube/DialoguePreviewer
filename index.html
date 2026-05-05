@@ -41,7 +41,8 @@
 <!-- 第二行：全域功能列（翻譯流程的上傳 / 下載 / 重置；由 translation-ui.js 注入內容） -->
 <header class="topbar topbar-globalops" id="topbar-globalops"></header>
 
-<!-- Translation progress bar — fed by translation-ui.js updateStats -->
+<!-- Translation progress bar — fed by translation-ui.js updateStats.
+     Disclosure (▼) expands the per-status breakdown directly underneath. -->
 <div class="t-progress" id="t-progress" hidden>
   <span class="t-progress-label">
     <span id="t-prog-done">0</span> / <span id="t-prog-total">0</span>
@@ -49,7 +50,9 @@
   </span>
   <div class="t-progress-track"><div class="t-progress-fill" id="t-prog-fill" style="width:0%"></div></div>
   <span class="t-progress-label" id="t-prog-pct">0%</span>
+  <button id="t-prog-toggle" class="t-progress-toggle" type="button" hidden aria-expanded="false">▼</button>
 </div>
+<div class="t-progress-breakdown" id="t-progress-breakdown" hidden></div>
 
 <main class="layout">
   <aside class="sidebar">
@@ -74,6 +77,8 @@
     <div class="sidebar-title sidebar-title-spaced">
       <span data-i18n="sidebar.nodes">Nodes</span> <span id="node-count" class="count"></span>
     </div>
+    <!-- Status filter chip row populated by ui.js renderStatusFilterBar() -->
+    <div id="status-filter-bar" class="sidebar-status-filter"></div>
     <input id="node-filter" type="search" data-i18n-placeholder="input.filter" placeholder="Filter…" class="node-filter">
     <ul id="node-list"></ul>
   </aside>

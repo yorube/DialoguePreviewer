@@ -17,6 +17,10 @@
 (function (global) {
   'use strict';
 
+  // Header name譯者 / Unity 兩邊都用 'ReviewStatus' — case-insensitive 比對。
+  const REVIEW_STATUS_HEADER = 'reviewstatus';
+  const VALID_REVIEW_STATUSES = new Set(['needs-review', 'approved']);
+
   /**
   * 通用入口：自動依副檔名選擇 parser。
   * @param {File} file - 從 <input type="file"> 拿到的 File 物件
@@ -25,7 +29,9 @@
   *
   * ParsedResult = {
   *   translations: Map<UID, text>,
-  *   stats: { sourceFile, locale, totalRows, withTranslation, missingUid, dupUids, headerColumns, format, csvHasBom },
+  *   statuses:     Map<UID, 'needs-review' | 'approved'>,   // 空 Map 代表檔內沒 ReviewStatus 欄
+  *   stats: { sourceFile, locale, totalRows, withTranslation, missingUid, dupUids,
+  *            headerColumns, format, csvHasBom, hasStatusColumn, statusCount, badStatusCount },
   *   warnings: string[],
   *   source: {                       // 給「下載同格式譯文」用
   *     format: 'csv' | 'xlsx',
@@ -34,6 +40,7 @@
   *     rows: string[][],             // 不含 header；對齊 headers 的長度
   *     idCol: number,
   *     localeCol: number,
+  *     statusCol: number,            // -1 if no ReviewStatus column
   *     csvHasBom: boolean,           // 只在 csv 時有意義
   *   }
   * }
@@ -112,11 +119,14 @@
     const cols = identifyColumns(headerRow, expectedLocale);
 
     const translations = new Map();
+    const statuses = new Map();
     const warnings = [];
     let totalRows = 0;
     let withTranslation = 0;
     let dupUids = 0;
     let missingUid = 0;
+    let statusCount = 0;
+    let badStatusCount = 0;
     const sourceFile = opts.fileName || '(unknown)';
 
     // 把所有 data rows 保留下來，方便之後 round-trip 寫回同格式檔
@@ -149,6 +159,24 @@
         }
         continue;
       }
+
+      // ReviewStatus 跟翻譯欄獨立處理 — 即使 text 是空,只要有狀態就記下來
+      // (例：譯者把空白行標 needs-review 表示「這格還沒處理」)
+      if (cols.statusCol !== -1) {
+        const raw = (normalized[cols.statusCol] || '').toString().trim().toLowerCase();
+        if (raw) {
+          if (VALID_REVIEW_STATUSES.has(raw)) {
+            statuses.set(uid, raw);
+            statusCount++;
+          } else {
+            badStatusCount++;
+            if (warnings.length < 20) {
+              warnings.push(`第 ${i + 1} 行 ReviewStatus 值「${raw}」不在 (needs-review / approved),已忽略`);
+            }
+          }
+        }
+      }
+
       if (text === '') continue;
 
       if (translations.has(uid)) {
@@ -165,6 +193,7 @@
 
     return {
       translations,
+      statuses,
       stats: {
         sourceFile,
         locale: cols.detectedLocale,
@@ -175,6 +204,9 @@
         headerColumns: headerRow,
         format: opts.format || 'csv',
         csvHasBom: !!opts.csvHasBom,
+        hasStatusColumn: cols.statusCol !== -1,
+        statusCount,
+        badStatusCount,
       },
       warnings,
       source: {
@@ -184,6 +216,7 @@
         rows:      dataRows,
         idCol:     cols.idCol,
         localeCol: cols.localeCol,
+        statusCol: cols.statusCol,
         csvHasBom: !!opts.csvHasBom,
       },
     };
@@ -236,9 +269,16 @@
       throw new Error(`翻譯欄與 ID 欄重疊，header 結構異常：[${headerRow.join(', ')}]`);
     }
 
+    // ReviewStatus 欄（選用）— 找不到回 -1,export 端會自動 append
+    let statusCol = -1;
+    for (let i = 0; i < norm.length; i++) {
+      if (norm[i] === REVIEW_STATUS_HEADER) { statusCol = i; break; }
+    }
+
     return {
       idCol,
       localeCol,
+      statusCol,
       detectedLocale,
     };
   }

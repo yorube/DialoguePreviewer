@@ -430,6 +430,159 @@ async function runIntegrationSuite(page) {
         throw new Error(`active node should have box-shadow, got "${shadow}"`);
       }
     });
+
+    // ─── Translation review-status: structural sanity (locale-agnostic) ───
+
+    await run('sidebar status-filter bar renders all 5 chips', async () => {
+      const bar = await page.locator('#status-filter-bar').count();
+      if (bar !== 1) throw new Error(`expected #status-filter-bar to exist`);
+      const chips = await page.locator('#status-filter-bar .status-filter-chip').count();
+      if (chips !== 5) throw new Error(`expected 5 status filter chips, got ${chips}`);
+      // The "All" chip should start active (no filter applied).
+      const allActive = await page.locator(
+        '#status-filter-bar .status-filter-chip-all.active'
+      ).count();
+      if (allActive !== 1) throw new Error(`All chip should start active`);
+    });
+
+    await run('clicking a status-filter chip toggles its .active class', async () => {
+      // Click "Has needs-review" chip.
+      const chip = page.locator('#status-filter-bar .status-filter-chip-accent');
+      await chip.click();
+      const cls = await chip.evaluate(el => el.classList.contains('active'));
+      if (!cls) throw new Error('expected accent chip active after click');
+      // All-chip should have lost its active state.
+      const allActive = await page.locator(
+        '#status-filter-bar .status-filter-chip-all.active'
+      ).count();
+      if (allActive !== 0) throw new Error(`All chip should NOT be active when needs-review filter is on`);
+      // Click again to deselect.
+      await chip.click();
+      const off = await chip.evaluate(el => el.classList.contains('active'));
+      if (off) throw new Error('chip should toggle off on second click');
+    });
+
+    await run('clicking All chip clears all status filters', async () => {
+      // Activate two filters first.
+      await page.locator('#status-filter-bar .status-filter-chip-warn').click();
+      await page.locator('#status-filter-bar .status-filter-chip-good').click();
+      const before = await page.locator('#status-filter-bar .status-filter-chip.active').count();
+      if (before < 2) throw new Error(`expected ≥2 active chips before All-clear, got ${before}`);
+      // Now click All.
+      await page.locator('#status-filter-bar .status-filter-chip-all').click();
+      const after = await page.locator('#status-filter-bar .status-filter-chip.active').count();
+      // Only "All" should remain active.
+      if (after !== 1) throw new Error(`expected exactly 1 active chip (All) after clear, got ${after}`);
+      const allActive = await page.locator(
+        '#status-filter-bar .status-filter-chip-all.active'
+      ).count();
+      if (allActive !== 1) throw new Error('All chip should be the lone active one');
+    });
+
+    await run('global progress disclosure toggle hidden until data loads', async () => {
+      // With no translation file imported and likely an en-US-ish active
+      // locale, the breakdown is null → toggle should be [hidden].
+      const tog = page.locator('#t-prog-toggle');
+      const exists = await tog.count();
+      if (exists !== 1) throw new Error('#t-prog-toggle should exist in DOM');
+      // Hidden attribute is set when there's no breakdown to show.
+      const hidden = await tog.evaluate(el => el.hasAttribute('hidden'));
+      if (!hidden) throw new Error('toggle should start [hidden] without breakdown data');
+    });
+
+    // ─── Per-locale status round-trip via TranslationState (no file UI) ───
+
+    await run('TranslationState.setStatus survives locale-state recreation', async () => {
+      const ok = await page.evaluate(() => {
+        const loc = '__test_int_status_' + Date.now();
+        const s1 = window.TranslationState.createState(loc);
+        s1.setStatus('uid-X', 'approved');
+        const s2 = window.TranslationState.createState(loc);
+        const ok = s2.getStatus('uid-X') === 'approved';
+        s2.reset();
+        try { localStorage.removeItem('yp.translation.' + loc); } catch (_) {}
+        return ok;
+      });
+      if (!ok) throw new Error('status did not survive recreation');
+    });
+
+    await run('bulkSetStatusForActiveLocale is callable from TranslationUI', async () => {
+      const fnType = await page.evaluate(
+        () => typeof window.TranslationUI.bulkSetStatusForActiveLocale
+      );
+      if (fnType !== 'function') {
+        throw new Error(`expected function, got ${fnType}`);
+      }
+    });
+
+    // ─── Target-locale-dependent: chip + menu (skip when only en-US loaded) ──
+
+    await run('flat-view status chip appears for non-source locale', async () => {
+      const targetLocale = await page.evaluate(() => {
+        const sel = document.getElementById('locale-select');
+        const opts = Array.from(sel.options).map(o => o.value);
+        return opts.find(l => l !== 'en-US' && l !== 'zh-TW' && l !== 'unknown') || null;
+      });
+      if (!targetLocale) {
+        // Skip — no target locale bundled in the test data.
+        return;
+      }
+      // Switch to the target locale + select a node.
+      await page.evaluate((loc) => {
+        const sel = document.getElementById('locale-select');
+        sel.value = loc;
+        sel.dispatchEvent(new Event('change'));
+      }, targetLocale);
+      // Wait for sidebar to reflect new locale (load is async).
+      await page.waitForFunction(
+        () => document.querySelectorAll('#node-list li').length > 0,
+        { timeout: 5000 }
+      );
+      await page.evaluate(() => document.querySelector('#node-list li').click());
+      // Turn on Edit Mode → flat view appears with chips.
+      await page.click('#t-mode-toggle');
+      await page.waitForFunction(
+        () => document.body.classList.contains('t-edit-mode'),
+        { timeout: 2000 }
+      );
+      // At least one .t-status-chip should appear in flat view (assuming
+      // the picked node has translatable lines).
+      const chipCount = await page.locator('#flat-edit-view .t-status-chip').count();
+      if (chipCount === 0) {
+        // Some nodes (overview / variable nodes) have no translatable lines —
+        // try the next node.
+        await page.evaluate(() => {
+          const lis = document.querySelectorAll('#node-list li');
+          if (lis.length > 1) lis[1].click();
+        });
+        const c2 = await page.locator('#flat-edit-view .t-status-chip').count();
+        if (c2 === 0) throw new Error('no .t-status-chip rendered in flat view');
+      }
+      // Toggle off
+      await page.click('#t-mode-toggle');
+    });
+
+    await run('flat-view bulk approve button rendered with count', async () => {
+      const targetLocale = await page.evaluate(() => {
+        const sel = document.getElementById('locale-select');
+        const opts = Array.from(sel.options).map(o => o.value);
+        return opts.find(l => l !== 'en-US' && l !== 'zh-TW' && l !== 'unknown') || null;
+      });
+      if (!targetLocale) return;
+      // Already on a target locale + node from the previous test, but
+      // re-enter Edit Mode to render the header.
+      await page.click('#t-mode-toggle');
+      await page.waitForFunction(
+        () => document.body.classList.contains('t-edit-mode'),
+        { timeout: 2000 }
+      );
+      const approveBtn = await page.locator('.flat-node-actions .flat-bulk-btn.approve').count();
+      const clearBtn   = await page.locator('.flat-node-actions .flat-bulk-btn.clear').count();
+      if (approveBtn !== 1) throw new Error(`expected 1 approve button, got ${approveBtn}`);
+      if (clearBtn !== 1)   throw new Error(`expected 1 clear button, got ${clearBtn}`);
+      // Toggle off so we leave clean state.
+      await page.click('#t-mode-toggle');
+    });
   }
 
   return results;
