@@ -639,6 +639,66 @@ async function runIntegrationSuite(page) {
         throw new Error(`expected 'inactive' for source locale, got '${probe.status}'`);
       }
     });
+
+    await run('script switch while on non-en-US locale still renders sidebar progress UI', async () => {
+      // Regression: stats UID computation requires en-US loaded. Before
+      // the fix, ensureLoaded only loaded the active locale, so switching
+      // to a fresh script while on (say) es-ES would leave en-US un-
+      // loaded for the new script → empty stats → silently no dots /
+      // X/Y count / progress bar.
+      const targetLocale = await page.evaluate(() => {
+        const sel = document.getElementById('locale-select');
+        const opts = Array.from(sel.options).map(o => o.value);
+        return opts.find(l => l !== 'en-US' && l !== 'zh-TW' && l !== 'unknown') || null;
+      });
+      if (!targetLocale) return;
+
+      const scripts = await page.evaluate(
+        () => Array.from(document.querySelectorAll('#script-select option')).map(o => o.value)
+      );
+      if (scripts.length < 2) return;
+
+      // Force the target locale, then jump to a script we likely haven't
+      // loaded en-US for in this session.
+      await page.evaluate((loc) => {
+        const sel = document.getElementById('locale-select');
+        sel.value = loc;
+        sel.dispatchEvent(new Event('change'));
+      }, targetLocale);
+      // Switch to the LAST script in the list (least likely to have been
+      // pre-loaded for any reason during prior tests).
+      const targetScript = scripts[scripts.length - 1];
+      await page.evaluate((s) => {
+        const sel = document.getElementById('script-select');
+        sel.value = s;
+        sel.dispatchEvent(new Event('change'));
+      }, targetScript);
+
+      // Wait for sidebar to settle.
+      await page.waitForFunction(
+        () => document.querySelectorAll('#node-list li').length > 0,
+        { timeout: 5000 }
+      );
+
+      const result = await page.evaluate(() => {
+        const lis = Array.from(document.querySelectorAll('#node-list li'));
+        const total = lis.length;
+        const withProg = lis.filter(li => li.querySelector('.node-progress-text')).length;
+        const tProgHidden = document.getElementById('t-progress').hasAttribute('hidden');
+        return { total, withProg, tProgHidden };
+      });
+
+      if (result.total === 0) {
+        throw new Error('no nodes in sidebar after script switch');
+      }
+      if (result.withProg === 0) {
+        throw new Error(`expected ≥1 node with progress UI, got 0/${result.total}` +
+          ' — en-US likely not auto-loaded for stats');
+      }
+      if (result.tProgHidden) {
+        throw new Error('top #t-progress bar is hidden — en-US likely not loaded for stats');
+      }
+    });
   }
 
   return results;

@@ -1132,12 +1132,29 @@
 
   async function loadAndShowCurrent() {
     if (!state.activeGroup || !state.activeLocale) return;
+    // Active locale drives the dialogue panel — load it first (must succeed).
     try {
       await ensureLoaded(state.activeGroup, state.activeLocale);
     } catch (e) {
       console.error(e);
       setStatus(t('status.loadFailed', { msg: e.message }));
       return;
+    }
+    // en-US is the canonical UID source for every stats path (top progress
+    // bar, sidebar dots / X/Y count, bundle-as-implicit-baseline map).
+    // Without it loaded, all those compute as empty and the progress UI
+    // silently disappears. Load it best-effort in parallel — failure here
+    // shouldn't block the dialogue panel, just degrades the sidebar to
+    // "no progress UI" (same as the pre-fix state).
+    if (state.activeLocale !== 'en-US') {
+      const localesMap = state.groups.get(state.activeGroup);
+      if (localesMap && localesMap.has('en-US')) {
+        try {
+          await ensureLoaded(state.activeGroup, 'en-US');
+        } catch (e) {
+          console.warn('[ui] en-US auto-load for stats failed:', e.message);
+        }
+      }
     }
     refreshNodeList();
     const proj = activeProject();
