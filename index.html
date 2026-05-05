@@ -139,17 +139,21 @@
 
 <div id="page-ui-strings" class="page page-ui-strings"></div>
 
-<script src="parser.js"></script>
-<script src="runtime.js"></script>
+<!-- Cache-bust query string is bumped per deploy that changes JS — same
+     mechanism style.css already uses. Browsers aggressively cache .js
+     responses (especially GitHub Pages' CDN), and without this users on
+     a tab they kept open across deploys would silently run old code. -->
+<script src="parser.js?v=review-status"></script>
+<script src="runtime.js?v=review-status"></script>
 <!-- Translation pipeline (porting v2 YarnFileConverter into the browser) -->
 <script src="xlsx.full.min.js"></script>
 <script src="jszip.min.js"></script>
-<script src="yarn-converter.js"></script>
-<script src="loc-parser.js"></script>
-<script src="loc-writer.js"></script>
-<script src="translation-state.js"></script>
-<script src="translation-ui.js"></script>
-<script src="ui-strings.js"></script>
-<script src="ui.js"></script>
+<script src="yarn-converter.js?v=review-status"></script>
+<script src="loc-parser.js?v=review-status"></script>
+<script src="loc-writer.js?v=review-status"></script>
+<script src="translation-state.js?v=review-status"></script>
+<script src="translation-ui.js?v=review-status"></script>
+<script src="ui-strings.js?v=review-status"></script>
+<script src="ui.js?v=review-status"></script>
 </body>
 </html>
