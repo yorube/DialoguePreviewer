@@ -510,6 +510,8 @@
     // Aggregate breakdown across the active project's UID set:
     //   untranslated / baselineTranslated / edited (orthogonal axis)
     //   needsReview / approved              (manual status, orthogonal)
+    // baselineTranslated counts both ts.baseline (uploaded CSV) AND the
+    // locale's bundled .json text — both are "translated, not edited."
     let done = 0;
     let breakdown = null;
     if (ts && total) {
@@ -522,6 +524,9 @@
         approved: 0,
       };
       const merged = ts.buildMergedMap();
+      const bundleMap = STATE.hooks.getLocaleBundleMap
+        ? STATE.hooks.getLocaleBundleMap(activeLocale)
+        : new Map();
       for (const uid of projUids) {
         const v = merged.get(uid);
         if (v != null && v !== '') {
@@ -529,7 +534,13 @@
           if (ts.source(uid) === 'override') breakdown.edited++;
           else breakdown.baselineTranslated++;
         } else {
-          breakdown.untranslated++;
+          const bundle = bundleMap.get(uid);
+          if (bundle && bundle !== '') {
+            done++;
+            breakdown.baselineTranslated++;
+          } else {
+            breakdown.untranslated++;
+          }
         }
         const st = ts.getStatus(uid);
         if (st === 'needs-review') breakdown.needsReview++;
@@ -661,6 +672,11 @@
 
   // ----- Translation lookup（給 transcript 渲染用） -----
 
+  // 顯示優先級鏈 (上→下):
+  //   1. ts.override     站內 inline edit
+  //   2. ts.baseline     使用者匯入的 CSV
+  //   3. bundle .json    該 locale 隨專案 ship 的鎖定譯文 (= originalText)
+  //   4. ''              真的沒譯
   // 上傳的譯文 + 站內編輯永遠都覆蓋顯示（跟 Edit Mode 無關）。
   // Edit Mode 只控制 ✏️ 按鈕 + 視覺裝飾（dim/border）。
   function lookupLine(uid, originalText) {
@@ -670,10 +686,17 @@
     const ts = getOrCreateState(activeLocale);
     if (!ts) return { text: originalText, status: 'untranslated', uid };
     const text = ts.get(uid);
-    if (text == null || text === '') {
-      return { text: originalText, status: 'untranslated', uid };
+    if (text != null && text !== '') {
+      return { text, status: ts.source(uid), uid };
     }
-    return { text, status: ts.source(uid), uid };
+    // Bundled locale .json text (passed in via originalText from the
+    // runtime / flat view) counts as implicit baseline when non-empty —
+    // it's the project's locked translation, on equal footing with an
+    // imported CSV baseline for status purposes.
+    if (originalText && originalText !== '') {
+      return { text: originalText, status: 'baseline', uid };
+    }
+    return { text: originalText, status: 'untranslated', uid };
   }
 
   function decorateLine(rowEl, info, originalText) {
@@ -982,6 +1005,18 @@
     }
     try {
       const merged = ts ? ts.buildMergedMap() : new Map();
+      // Fold the locale's bundled .json text into merged so locked-locale
+      // exports include the actual translations even when the user hasn't
+      // imported a CSV. ts entries take priority — once an import or
+      // inline edit exists for a uid, that wins. This makes the
+      // "no-import → export → edit externally → re-import" round-trip
+      // work for any locale, not just ones already touched by an import.
+      if (STATE.hooks && STATE.hooks.getLocaleBundleMap) {
+        const bundle = STATE.hooks.getLocaleBundleMap(activeLocale);
+        for (const [uid, text] of bundle) {
+          if (!merged.has(uid)) merged.set(uid, text);
+        }
+      }
       const statuses = ts ? ts.getStatusMap() : new Map();
       const result = LocWriter.writeLocFile(source, merged, { statuses });
       const blob = result.payload instanceof Blob
@@ -1242,6 +1277,9 @@
   // Unlike lookupLine() — which only looks at the current activeLocale —
   // this reaches into TranslationState[locale] for any locale, so the
   // comparison reflects imported files + inline edits per language.
+  // Same bundle-as-implicit-baseline rule as lookupLine: Compare Mode
+  // already passes the locale's AST text as fallbackText, so non-empty
+  // fallback counts as 'baseline' (locked translation).
   function lookupForLocale(locale, uid, fallbackText) {
     if (!locale || !uid) return { text: fallbackText, status: 'inactive' };
     if (isSourceLocale(locale)) return { text: fallbackText, status: 'inactive' };
@@ -1256,10 +1294,13 @@
     );
     if (!ts) return { text: fallbackText, status: 'untranslated' };
     const text = ts.get(uid);
-    if (text == null || text === '') {
-      return { text: fallbackText, status: 'untranslated' };
+    if (text != null && text !== '') {
+      return { text, status: ts.source(uid) };
     }
-    return { text, status: ts.source(uid) };
+    if (fallbackText && fallbackText !== '') {
+      return { text: fallbackText, status: 'baseline' };
+    }
+    return { text: fallbackText, status: 'untranslated' };
   }
 
   // Used by Compare Mode (ui.js) to write edits back to a non-active locale.
@@ -1308,6 +1349,9 @@
     const ts = getOrCreateState(activeLocale);
     if (!ts) return out;
     const merged = ts.buildMergedMap();
+    const bundleMap = STATE.hooks.getLocaleBundleMap
+      ? STATE.hooks.getLocaleBundleMap(activeLocale)
+      : new Map();
     for (const [title, uids] of perNodeUidIndex) {
       let translated = 0, baselineTranslated = 0, edited = 0, untranslated = 0;
       let needsReview = 0, approved = 0;
@@ -1318,7 +1362,16 @@
           if (ts.source(uid) === 'override') edited++;
           else baselineTranslated++;
         } else {
-          untranslated++;
+          // ts has nothing — fall back to bundled locale .json (locked
+          // translation). Counted as baseline-translated, same priority
+          // as ts.baseline for stats purposes.
+          const bundle = bundleMap.get(uid);
+          if (bundle && bundle !== '') {
+            translated++;
+            baselineTranslated++;
+          } else {
+            untranslated++;
+          }
         }
         const st = ts.getStatus(uid);
         if (st === 'needs-review') needsReview++;

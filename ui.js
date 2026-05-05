@@ -2159,6 +2159,60 @@
     return TranslationUI.perNodeStatsForActiveLocale(collectPerNodeUidIndex());
   }
 
+  // Build a Map<uid, bundledText> for one locale, where uid uses the en-US
+  // canonical key (en-US filename's GUID + en-US nodeIndex + en-US srcLine)
+  // and text comes from that locale's bundled .json. Used by translation-ui
+  // to treat the bundled translation as an implicit baseline — so locales
+  // whose translations were already locked in the project (es-ES / it-IT /
+  // ru-RU / ja-JP / zh-CN) don't show as untranslated just because the user
+  // never imported a CSV for them.
+  //
+  // AST-position alignment (same trick Compare Mode's localeFlatEntries
+  // uses) handles CJK srcLine drift: en-US's srcLine drives the UID,
+  // active locale contributes the text at the same AST index.
+  //
+  // Caching: per-(locale project) WeakMap. The project object identity is
+  // stable for an entry's lifetime; replaced on script reload, which
+  // naturally invalidates.
+  const __bundleTextCache = new WeakMap();   // localeProject → Map<uid, text>
+  function collectLocaleBundleMap(locale) {
+    if (!locale) return new Map();
+    if (locale === 'en-US' || locale === 'zh-TW' || locale === 'unknown') {
+      return new Map();
+    }
+    if (!state.activeGroup) return new Map();
+    const groupMap = state.groups.get(state.activeGroup);
+    if (!groupMap) return new Map();
+    const enEntry = groupMap.get('en-US');
+    const localeEntry = groupMap.get(locale);
+    if (!enEntry || !enEntry.project) return new Map();
+    if (!localeEntry || !localeEntry.project) return new Map();
+    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return new Map();
+
+    const cached = __bundleTextCache.get(localeEntry.project);
+    if (cached) return cached;
+
+    const out = new Map();
+    for (const [title, enNode] of enEntry.project.nodes) {
+      const localeNode = localeEntry.project.nodes.get(title);
+      if (!localeNode) continue;
+      const enArr = flattenComparableEntries(enNode);
+      const localeArr = flattenComparableEntries(localeNode);
+      const len = Math.min(enArr.length, localeArr.length);
+      for (let i = 0; i < len; i++) {
+        const e = enArr[i];
+        const l = localeArr[i];
+        if (e.srcLine == null) continue;
+        const txt = (l.text || '').toString();
+        if (!txt.trim()) continue;
+        const uid = TranslationUI.getUidFor(enEntry.filename, enNode.nodeIndex, e.srcLine);
+        if (uid) out.set(uid, txt);
+      }
+    }
+    __bundleTextCache.set(localeEntry.project, out);
+    return out;
+  }
+
   function nodePassesStatusFilter(stats) {
     if (!state.statusFilter || state.statusFilter.size === 0) return true;
     if (!stats) return true;   // no data yet — don't hide anything
@@ -3183,6 +3237,11 @@
         // Translatable UID set for the active script (en-US baseline). Used
         // by the stats / progress bar to render "X / Y translated".
         getActiveProjectUids: collectActiveProjectUids,
+        // Bundled-translation map for any locale (Map<uid, text>). Used as
+        // implicit baseline so locales with locked .json translations don't
+        // show as untranslated when the user hasn't imported a CSV. Empty
+        // for source locales / when projects aren't loaded.
+        getLocaleBundleMap: collectLocaleBundleMap,
         // Click on a global breakdown segment → toggle the matching sidebar
         // status filter chip (cross-component wiring so the breakdown
         // disclosure is actionable, not just informational).

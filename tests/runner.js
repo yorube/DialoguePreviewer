@@ -583,6 +583,62 @@ async function runIntegrationSuite(page) {
       // Toggle off so we leave clean state.
       await page.click('#t-mode-toggle');
     });
+
+    // ─── Bundle-as-implicit-baseline (locked-locale recognition) ─────
+    // Run last because some of these change the active locale.
+
+    await run('lookupLine returns baseline when bundle text non-empty + ts empty', async () => {
+      const targetLocale = await page.evaluate(() => {
+        const sel = document.getElementById('locale-select');
+        const opts = Array.from(sel.options).map(o => o.value);
+        return opts.find(l => l !== 'en-US' && l !== 'zh-TW' && l !== 'unknown') || null;
+      });
+      if (!targetLocale) return;
+      await page.evaluate((loc) => {
+        const sel = document.getElementById('locale-select');
+        sel.value = loc;
+        sel.dispatchEvent(new Event('change'));
+      }, targetLocale);
+      const probe = await page.evaluate(() => window.TranslationUI.lookupLine(
+        'fake-uid-no-ts-no-override',
+        'Bonjour, this is the bundled text',
+      ));
+      if (probe.status !== 'baseline') {
+        throw new Error(`expected 'baseline' for non-empty originalText, got '${probe.status}'`);
+      }
+      if (probe.text !== 'Bonjour, this is the bundled text') {
+        throw new Error(`expected returned text to equal originalText, got '${probe.text}'`);
+      }
+    });
+
+    await run('lookupLine returns untranslated when both bundle and ts empty', async () => {
+      const targetLocale = await page.evaluate(() => {
+        const sel = document.getElementById('locale-select');
+        const opts = Array.from(sel.options).map(o => o.value);
+        return opts.find(l => l !== 'en-US' && l !== 'zh-TW' && l !== 'unknown') || null;
+      });
+      if (!targetLocale) return;
+      const probe = await page.evaluate(
+        () => window.TranslationUI.lookupLine('fake-uid-no-bundle', '')
+      );
+      if (probe.status !== 'untranslated') {
+        throw new Error(`expected 'untranslated' for empty bundle + empty ts, got '${probe.status}'`);
+      }
+    });
+
+    await run('source locale lookupLine returns inactive even with bundle text', async () => {
+      await page.evaluate(() => {
+        const sel = document.getElementById('locale-select');
+        sel.value = 'en-US';
+        sel.dispatchEvent(new Event('change'));
+      });
+      const probe = await page.evaluate(
+        () => window.TranslationUI.lookupLine('any-uid', 'Hello')
+      );
+      if (probe.status !== 'inactive') {
+        throw new Error(`expected 'inactive' for source locale, got '${probe.status}'`);
+      }
+    });
   }
 
   return results;
