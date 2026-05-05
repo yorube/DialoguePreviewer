@@ -974,7 +974,7 @@
 
   // ----- Download (CSV/xlsx in same format as upload) -----
 
-  function onDownloadLocFile() {
+  async function onDownloadLocFile() {
     const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
     if (!activeLocale) { alert(t('tr.alert.pickLocale')); return; }
     if (isSourceLocale(activeLocale)) {
@@ -985,34 +985,61 @@
       console.error('LocWriter missing');
       return;
     }
-    // getOrCreateState (not raw .get) so a fresh page load that hasn't yet
-    // touched this locale still pulls the persisted overrides + source out
-    // of localStorage. Without this the export would silently produce a
-    // CSV with empty translation columns.
-    const ts = getOrCreateState(activeLocale);
-    // If the user uploaded a file we keep their original format byte-for-byte.
-    // Otherwise (inline-edits-only) we synthesize a CSV from the en-US project
-    // AST so they can still download their progress.
-    let source = ts ? ts.getSource() : null;
-    if (source) {
-      // Add FileName / NodeTitle / Notes / ReviewStatus columns so notes
-      // and statuses travel with the export. No-op when the source already
-      // has them and the relevant data is empty.
-      source = augmentSourceForExport(source);
-    } else {
-      source = buildSyntheticSource(activeLocale);
-      if (!source) { alert(t('tr.alert.noBaseline')); return; }
+
+    // Disable + status-flash the button while we batch-load anything not
+    // yet in memory. Without this the user can double-click and we'd
+    // queue overlapping exports.
+    const dlBtn = document.getElementById('t-download-loc');
+    let priorLabel = '';
+    if (dlBtn) {
+      priorLabel = dlBtn.textContent;
+      dlBtn.disabled = true;
+      dlBtn.textContent = t('tr.export.preparing');
     }
+
     try {
+      // Pre-load every (group, locale) the export will need so the CSV
+      // covers all scripts in the manifest, not just the ones the user
+      // has happened to click through. ensureAllGroupsLoadedFor swallows
+      // per-script failures (manifest typos, network blips) so a single
+      // bad file doesn't kill the export.
+      if (STATE.hooks && STATE.hooks.ensureAllGroupsLoadedFor) {
+        await STATE.hooks.ensureAllGroupsLoadedFor(activeLocale);
+      }
+
+      // getOrCreateState (not raw .get) so a fresh page load that hasn't yet
+      // touched this locale still pulls the persisted overrides + source out
+      // of localStorage. Without this the export would silently produce a
+      // CSV with empty translation columns.
+      const ts = getOrCreateState(activeLocale);
+      // If the user uploaded a file we keep their original format byte-for-byte.
+      // Otherwise (inline-edits-only OR locked-locale-no-import) we synthesize
+      // a CSV from the en-US project AST so they can still download progress.
+      let source = ts ? ts.getSource() : null;
+      if (source) {
+        // Add FileName / NodeTitle / Notes / ReviewStatus columns so notes
+        // and statuses travel with the export. No-op when the source already
+        // has them and the relevant data is empty.
+        source = augmentSourceForExport(source);
+      } else {
+        source = buildSyntheticSource(activeLocale);
+        if (!source) { alert(t('tr.alert.noBaseline')); return; }
+      }
+
       const merged = ts ? ts.buildMergedMap() : new Map();
-      // Fold the locale's bundled .json text into merged so locked-locale
-      // exports include the actual translations even when the user hasn't
+      // Fold the locale's bundled .json text (across EVERY loaded group,
+      // not just the active one) into merged so locked-locale exports
+      // include the actual translations even when the user hasn't
       // imported a CSV. ts entries take priority — once an import or
       // inline edit exists for a uid, that wins. This makes the
       // "no-import → export → edit externally → re-import" round-trip
-      // work for any locale, not just ones already touched by an import.
-      if (STATE.hooks && STATE.hooks.getLocaleBundleMap) {
-        const bundle = STATE.hooks.getLocaleBundleMap(activeLocale);
+      // work for any locale × any script, not just ones already touched
+      // by an import.
+      const bundleHook = STATE.hooks && (
+        STATE.hooks.getLocaleBundleMapAllGroups || STATE.hooks.getLocaleBundleMap
+      );
+      if (bundleHook) {
+        const bundle = bundleHook(activeLocale);
         for (const [uid, text] of bundle) {
           if (!merged.has(uid)) merged.set(uid, text);
         }
@@ -1027,6 +1054,11 @@
     } catch (e) {
       console.error('[translation-ui] download loc failed:', e);
       alert(t('tr.alert.downloadFailed', { msg: e.message }));
+    } finally {
+      if (dlBtn) {
+        dlBtn.disabled = false;
+        dlBtn.textContent = priorLabel;
+      }
     }
   }
 

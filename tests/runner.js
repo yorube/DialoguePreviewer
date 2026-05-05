@@ -51,6 +51,39 @@ async function runIntegrationSuite(page) {
     catch (e) { results.push({ name, pass: false, err: e.message }); }
   }
 
+  // RFC 4180 CSV parser — mirrors loc-parser.js's parseCsvText so the
+  // export-coverage assertion can read its own output without dragging in
+  // the browser globals. Strips leading BOM if present.
+  function parseCsv(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const rows = [];
+    let row = [], cell = '', inQuotes = false, i = 0, len = text.length;
+    while (i < len) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { cell += '"'; i += 2; continue; }
+          inQuotes = false; i++; continue;
+        }
+        cell += c; i++; continue;
+      }
+      if (c === '"') { inQuotes = true; i++; continue; }
+      if (c === ',') { row.push(cell); cell = ''; i++; continue; }
+      if (c === '\r') {
+        row.push(cell); rows.push(row); row = []; cell = '';
+        if (text[i + 1] === '\n') i += 2; else i++;
+        continue;
+      }
+      if (c === '\n') {
+        row.push(cell); rows.push(row); row = []; cell = '';
+        i++; continue;
+      }
+      cell += c; i++;
+    }
+    if (cell.length > 0 || row.length > 0) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+
   await page.goto(`http://127.0.0.1:${PORT}/index.html`, { waitUntil: 'load' });
   // Wait for ui.js bootstrap: window.YP must be installed and the
   // dialogue-toolbar must have rendered (its presence proves init() ran).
@@ -637,6 +670,103 @@ async function runIntegrationSuite(page) {
       );
       if (probe.status !== 'inactive') {
         throw new Error(`expected 'inactive' for source locale, got '${probe.status}'`);
+      }
+    });
+
+    await run('export covers every loaded script (cross-script bundle coverage)', async () => {
+      // Regression: collectLocaleBundleMap was per-active-group only, while
+      // buildSyntheticSource emits rows for every loaded en-US group.
+      // Result was: rows from non-active scripts had empty translation
+      // cells in the exported CSV. Fix: bundle map spans all groups +
+      // pre-load all manifest groups on export.
+      const targetLocale = await page.evaluate(() => {
+        const sel = document.getElementById('locale-select');
+        const opts = Array.from(sel.options).map(o => o.value);
+        return opts.find(l => l !== 'en-US' && l !== 'zh-TW' && l !== 'unknown') || null;
+      });
+      if (!targetLocale) return;
+      const scripts = await page.evaluate(
+        () => Array.from(document.querySelectorAll('#script-select option')).map(o => o.value)
+      );
+      if (scripts.length < 2) return;
+
+      // Switch to target locale + visit two scripts.
+      await page.evaluate((loc) => {
+        const sel = document.getElementById('locale-select');
+        sel.value = loc;
+        sel.dispatchEvent(new Event('change'));
+      }, targetLocale);
+      await page.waitForTimeout(500);
+      await page.evaluate((s) => {
+        const sel = document.getElementById('script-select');
+        sel.value = s;
+        sel.dispatchEvent(new Event('change'));
+      }, scripts[1]);
+      await page.waitForTimeout(800);
+      await page.evaluate((s) => {
+        const sel = document.getElementById('script-select');
+        sel.value = s;
+        sel.dispatchEvent(new Event('change'));
+      }, scripts[0]);
+      await page.waitForTimeout(800);
+
+      // Capture the export CSV.
+      const csv = await page.evaluate(() => {
+        return new Promise(resolve => {
+          let captured = null;
+          const orig = URL.createObjectURL;
+          URL.createObjectURL = (blob) => {
+            const reader = new FileReader();
+            reader.onloadend = () => { captured = reader.result; };
+            reader.readAsText(blob);
+            return 'blob:fake';
+          };
+          document.getElementById('t-download-loc').click();
+          // Allow time for the async export pipeline (loads + writes).
+          const tick = () => {
+            if (captured !== null) {
+              URL.createObjectURL = orig;
+              resolve(captured);
+            } else {
+              setTimeout(tick, 200);
+            }
+          };
+          setTimeout(tick, 200);
+        });
+      });
+
+      if (!csv) throw new Error('export produced no output');
+
+      // Parse the CSV and audit per-script es-ES coverage.
+      const rows = parseCsv(csv);
+      const headers = rows[0];
+      const idx = (n) => headers.findIndex(h => String(h).toLowerCase() === n.toLowerCase());
+      const fileCol = idx('FileName');
+      const localeCol = idx(targetLocale);
+      if (fileCol === -1) throw new Error('exported CSV has no FileName column');
+      if (localeCol === -1) throw new Error(`exported CSV has no ${targetLocale} column`);
+
+      const perFile = {};
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.every(c => !c)) continue;
+        const file = row[fileCol] || '<no-file>';
+        const txt  = row[localeCol] || '';
+        if (!perFile[file]) perFile[file] = { total: 0, withTr: 0 };
+        perFile[file].total++;
+        if (txt && txt.trim()) perFile[file].withTr++;
+      }
+
+      const fileCount = Object.keys(perFile).length;
+      if (fileCount < 2) {
+        throw new Error(`expected rows from ≥2 scripts in export, got ${fileCount}: ${Object.keys(perFile).join(', ')}`);
+      }
+      // Every script with rows must have non-zero coverage. (100% would be
+      // ideal but tolerate locale-specific gaps in the bundled .json.)
+      for (const [f, g] of Object.entries(perFile)) {
+        if (g.total > 0 && g.withTr === 0) {
+          throw new Error(`script "${f}" has 0/${g.total} translated cells in export — bundle map didn't cover it`);
+        }
       }
     });
 

@@ -217,6 +217,7 @@
       'tr.bulk.confirm.clear':                 'Clear review status on {n} lines in this node?',
       'tr.bulk.empty':                         'This node has no translatable lines.',
       'tr.alert.statusesRestored':             '\n  ✓ review statuses restored: {n}',
+      'tr.export.preparing':                   'Preparing export…',
       'tr.progress.disclosure.expand':         'Show status breakdown',
       'tr.progress.disclosure.collapse':       'Hide status breakdown',
       'tr.progress.breakdown.untranslated':    'untranslated {n}',
@@ -475,6 +476,7 @@
       'tr.bulk.confirm.clear':                 '清掉這個節點 {n} 行的校對狀態?',
       'tr.bulk.empty':                         '這個節點沒有可翻譯的行。',
       'tr.alert.statusesRestored':             '\n  ✓ 還原校對狀態:{n} 條',
+      'tr.export.preparing':                   '準備匯出中…',
       'tr.progress.disclosure.expand':         '展開狀態細目',
       'tr.progress.disclosure.collapse':       '收起狀態細目',
       'tr.progress.breakdown.untranslated':    '未翻 {n}',
@@ -2230,6 +2232,66 @@
     return out;
   }
 
+  // Like collectLocaleBundleMap but unions the bundle map across every
+  // group that has BOTH en-US and the target locale loaded — not just
+  // the active group. The export pipeline (buildSyntheticSource) emits
+  // rows from every loaded en-US group; without this, rows from non-
+  // active groups would have empty translation cells in the exported
+  // CSV even though the data sits right there in the locale's bundled
+  // .json. Cache piggy-backs on the per-group cache via a recursive
+  // call (each individual collectLocaleBundleMap call still hits its
+  // WeakMap), so re-export is cheap.
+  function collectLocaleBundleMapAllGroups(locale) {
+    if (!locale || locale === 'en-US' || locale === 'zh-TW' || locale === 'unknown') {
+      return new Map();
+    }
+    const out = new Map();
+    const savedActive = state.activeGroup;
+    try {
+      for (const [group, localesMap] of state.groups) {
+        if (!localesMap.has('en-US') || !localesMap.has(locale)) continue;
+        // Temporarily flip activeGroup so collectLocaleBundleMap (which
+        // is keyed off it) walks the right group. Restored below.
+        state.activeGroup = group;
+        const m = collectLocaleBundleMap(locale);
+        for (const [uid, text] of m) out.set(uid, text);
+      }
+    } finally {
+      state.activeGroup = savedActive;
+    }
+    return out;
+  }
+
+  // Best-effort auto-load every (group × locale) combo needed for a
+  // complete export. Does not throw — failures are logged and skipped
+  // (the export still proceeds with whatever loaded). Resolves once all
+  // pending loads settle so the caller can build the source + bundle
+  // with confidence.
+  async function ensureAllGroupsLoadedFor(locale) {
+    const groups = Array.from(state.groups.keys());
+    const tasks = [];
+    for (const g of groups) {
+      const localesMap = state.groups.get(g);
+      if (!localesMap) continue;
+      // en-US: needed for UID computation + buildSyntheticSource rows.
+      const en = localesMap.get('en-US');
+      if (en && !en.project) {
+        tasks.push(ensureLoaded(g, 'en-US')
+          .catch(e => console.warn('[export]', g, 'en-US', e.message)));
+      }
+      // Target locale: needed for the bundle-as-implicit-baseline fallback.
+      // Skip when the script doesn't ship that locale at all (manifest miss).
+      if (locale && locale !== 'en-US') {
+        const tgt = localesMap.get(locale);
+        if (tgt && !tgt.project) {
+          tasks.push(ensureLoaded(g, locale)
+            .catch(e => console.warn('[export]', g, locale, e.message)));
+        }
+      }
+    }
+    if (tasks.length) await Promise.all(tasks);
+  }
+
   function nodePassesStatusFilter(stats) {
     if (!state.statusFilter || state.statusFilter.size === 0) return true;
     if (!stats) return true;   // no data yet — don't hide anything
@@ -3259,6 +3321,13 @@
         // show as untranslated when the user hasn't imported a CSV. Empty
         // for source locales / when projects aren't loaded.
         getLocaleBundleMap: collectLocaleBundleMap,
+        // Same as above but spans every loaded group — used by the export
+        // pipeline so rows from non-active scripts also get bundle text.
+        getLocaleBundleMapAllGroups: collectLocaleBundleMapAllGroups,
+        // Async pre-loader the export pipeline awaits before building the
+        // synthetic source + bundle, ensuring the CSV covers every script
+        // in the manifest (not just ones the user has manually visited).
+        ensureAllGroupsLoadedFor,
         // Click on a global breakdown segment → toggle the matching sidebar
         // status filter chip (cross-component wiring so the breakdown
         // disclosure is actionable, not just informational).
