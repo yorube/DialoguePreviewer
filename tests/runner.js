@@ -620,13 +620,12 @@ async function runIntegrationSuite(page) {
     // ─── Bundle-as-implicit-baseline (locked-locale recognition) ─────
     // Run last because some of these change the active locale.
 
-    await run('R2: lookupLine returns untranslated for uid not in bundle map (fake / English-fallback)', async () => {
-      // Under R2 (the post-fix rule), bundle map only contains uids whose
-      // locale text *differs* from en-US. A uid that's not in the map —
-      // either because it doesn't exist OR because its bundle text equals
-      // en-US (translator-not-yet-touched fallback) — must read as
-      // 'untranslated', NOT 'baseline'. This is the fix for "fr-FR
-      // mid-translation showing 100% translated" reported in production.
+    await run('lookupLine returns untranslated for uid not in bundle map (fake / unloaded)', async () => {
+      // Bundle map contains every real translatable uid for the active
+      // locale (when the locale has a real bundle). A fake uid won't be
+      // there → must read as 'untranslated'. For locales using the
+      // 404-fallback (no bundle), the bundle map is empty → every uid
+      // also reads as 'untranslated' until the user imports a CSV/xlsx.
       const targetLocale = await page.evaluate(() => {
         const sel = document.getElementById('locale-select');
         const opts = Array.from(sel.options).map(o => o.value);
@@ -649,7 +648,7 @@ async function runIntegrationSuite(page) {
       }
     });
 
-    await run('R2: lookupLine returns baseline for real uid whose bundle differs from en-US', async () => {
+    await run('lookupLine returns baseline for real uid present in bundle map', async () => {
       // Walk the active locale's project to find a uid where bundle text
       // genuinely differs from en-US — that one MUST be 'baseline'.
       const targetLocale = await page.evaluate(() => {

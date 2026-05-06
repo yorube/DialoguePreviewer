@@ -2242,6 +2242,14 @@
     if (!localeEntry || !localeEntry.project) return new Map();
     if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return new Map();
 
+    // 404-fallback: when the locale has no bundle JSON of its own,
+    // ensureLoaded points its project at en-US's so the runtime can play
+    // dialogue. Treat that as "no real bundle data" — bundle map stays
+    // empty, stats show 0/N (correct: nothing translated yet for this
+    // locale). Without this short-circuit the next loop would walk en-US
+    // against itself and add every line, falsely showing 100%.
+    if (localeEntry.isFallbackToEnUS) return new Map();
+
     const cached = __bundleTextCache.get(localeEntry.project);
     if (cached) return cached;
 
@@ -2258,24 +2266,14 @@
         if (e.srcLine == null) continue;
         const txt = (l.text || '').toString();
         if (!txt.trim()) continue;
-        // R2 rule: a non-empty bundle entry only counts as translated when
-        // it's *different* from the en-US source. Mid-translation locales
-        // (e.g. fr-FR while it's still in progress) typically have the
-        // bundler keep the English text as fallback for missing lines —
-        // counting those English-fallback lines as "translated" lies about
-        // progress (locale would show 100% even when nothing's done).
-        // Exception: lines with NO letter characters (numbers / symbols /
-        // punctuation / emoji like "...", "5", "100%", "?", "—") don't
-        // *need* translation across locales, so the translator legitimately
-        // keeps them identical to source. Skip R2 for those — non-empty is
-        // good enough. \p{L} catches every script's letter category (Latin,
-        // CJK, Cyrillic, Arabic, etc), so the rule remains "is there any
-        // word-shaped content here that should differ between languages".
-        // Remaining false-negative: proper noun lines like "OK" / "Microsoft"
-        // / "Mira" where the translator keeps it. User can mark "approved"
-        // via the chip menu to override.
-        const enText = (e.text || '').toString();
-        if (txt === enText && /\p{L}/u.test(enText)) continue;
+        // Simple rule: non-empty bundle text counts as translated. We
+        // trust the bundler to leave missing lines empty (project policy)
+        // and trust translators to put real translations in the cells —
+        // no equality-with-en-US check here, because that would falsely
+        // flag legitimate same-as-source lines (proper nouns "Microsoft" /
+        // "OK" / character names like "Mira"). The only "missing data"
+        // shape we have to defend against is the 404-fallback case above,
+        // where there's no real bundle at all.
         const uid = TranslationUI.getUidFor(enEntry.filename, enNode.nodeIndex, e.srcLine);
         if (uid) out.set(uid, txt);
       }
