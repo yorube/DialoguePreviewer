@@ -1062,13 +1062,27 @@
     }
   }
 
-  // Build the v2 LocKit-style CSV (Type, Gender, CharacterName, en-US,
+  // Map the speakers.json single-char codes ('M' / 'F' / 'N') to the
+  // long-form labels used in the exported Gender column. Anything that
+  // isn't recognised — including unmarked NPCs and narrator lines —
+  // falls through to 'none' so the column is never blank.
+  function genderLabel(raw) {
+    if (raw === 'M' || raw === 'm') return 'male';
+    if (raw === 'F' || raw === 'f') return 'female';
+    return 'none';
+  }
+
+  // Build the v2 LocKit-style sheet (Type, Gender, CharacterName, en-US,
   // {locale}, ID, FileName, NodeTitle, Notes, ReviewStatus) by re-running
   // YarnConverter.buildSO on every loaded en-US project — same code path
   // Unity v2 uses, so the file is import-ready. The trailing FileName /
   // NodeTitle / Notes / ReviewStatus columns let translator notes and
   // review states round-trip across browsers and machines (Unity's parser
-  // locates columns by header name and ignores unknown extras).
+  // locates columns by header name and ignores unknown extras). Synthetic
+  // exports default to .xlsx — translators read the file in Excel, where
+  // xlsx avoids CSV's BOM / escape pitfalls and preserves cell formatting
+  // for the Notes column. (Uploaded CSVs still round-trip back to CSV via
+  // the augmentSourceForExport path, preserving the user's input format.)
   function buildSyntheticSource(targetLocale) {
     if (!STATE.hooks || !STATE.hooks.getAllGroups || !STATE.hooks.getEntry) return null;
     if (!STATE.guids) return null;
@@ -1105,7 +1119,7 @@
           if (!line.dialogue) continue;
           rows.push([
             line.category,
-            genderMap[line.characterName] || '',
+            genderLabel(genderMap[line.characterName]),
             line.characterName || '',
             line.dialogue,
             '',
@@ -1122,14 +1136,14 @@
 
     if (rows.length === 0) return null;
     return {
-      format: 'csv',
-      fileName: `${targetLocale}_translations.csv`,
+      format: 'xlsx',
+      fileName: `${targetLocale}_translations.xlsx`,
       headers,
       rows,
       idCol: 5,
       localeCol: 4,
       statusCol: 9,
-      csvHasBom: true,
+      csvHasBom: false,   // xlsx doesn't carry a BOM; field kept for shape parity
     };
   }
 

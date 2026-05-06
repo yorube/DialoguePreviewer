@@ -673,12 +673,13 @@ async function runIntegrationSuite(page) {
       }
     });
 
-    await run('export covers every loaded script (cross-script bundle coverage)', async () => {
-      // Regression: collectLocaleBundleMap was per-active-group only, while
-      // buildSyntheticSource emits rows for every loaded en-US group.
-      // Result was: rows from non-active scripts had empty translation
-      // cells in the exported CSV. Fix: bundle map spans all groups +
-      // pre-load all manifest groups on export.
+    await run('export covers every loaded script + emits xlsx with expanded gender labels', async () => {
+      // Regressions guarded:
+      //   1. Bundle map spans all loaded groups (not just active) — rows
+      //      from non-active scripts must have non-empty translation cells.
+      //   2. Synthetic export emits .xlsx (not .csv).
+      //   3. Gender column uses 'male' / 'female' / 'none' labels (not
+      //      single-char codes / blanks).
       const targetLocale = await page.evaluate(() => {
         const sel = document.getElementById('locale-select');
         const opts = Array.from(sel.options).map(o => o.value);
@@ -710,59 +711,95 @@ async function runIntegrationSuite(page) {
       }, scripts[0]);
       await page.waitForTimeout(800);
 
-      // Capture the export CSV.
-      const csv = await page.evaluate(() => {
+      // Capture the export blob and parse it in-page (SheetJS is loaded
+      // for both csv and xlsx paths). Returns { type, filename, aoa }.
+      const captured = await page.evaluate(() => {
         return new Promise(resolve => {
-          let captured = null;
-          const orig = URL.createObjectURL;
+          let result = null;
+          const origCreate = URL.createObjectURL;
+          let capturedBlob = null;
+          let capturedName = null;
           URL.createObjectURL = (blob) => {
-            const reader = new FileReader();
-            reader.onloadend = () => { captured = reader.result; };
-            reader.readAsText(blob);
+            capturedBlob = blob;
             return 'blob:fake';
           };
+          // Patch <a>.click so we can grab the suggested filename without
+          // actually triggering navigation.
+          const origAClick = HTMLAnchorElement.prototype.click;
+          HTMLAnchorElement.prototype.click = function () {
+            if (this.download) capturedName = this.download;
+            // Don't call origAClick — would try to navigate to blob:fake.
+          };
           document.getElementById('t-download-loc').click();
-          // Allow time for the async export pipeline (loads + writes).
           const tick = () => {
-            if (captured !== null) {
-              URL.createObjectURL = orig;
-              resolve(captured);
-            } else {
-              setTimeout(tick, 200);
-            }
+            if (!capturedBlob) { setTimeout(tick, 200); return; }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              try {
+                const buf = new Uint8Array(reader.result);
+                const wb = XLSX.read(buf, { type: 'array' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                result = { filename: capturedName, aoa, mime: capturedBlob.type };
+              } catch (e) {
+                result = { error: 'parse failed: ' + e.message, filename: capturedName, mime: capturedBlob.type };
+              }
+              URL.createObjectURL = origCreate;
+              HTMLAnchorElement.prototype.click = origAClick;
+              resolve(result);
+            };
+            reader.readAsArrayBuffer(capturedBlob);
           };
           setTimeout(tick, 200);
         });
       });
 
-      if (!csv) throw new Error('export produced no output');
+      if (!captured) throw new Error('export produced no output');
+      if (captured.error) throw new Error(captured.error);
+      if (!captured.aoa || captured.aoa.length < 2) {
+        throw new Error('exported workbook is empty');
+      }
+      // Filename ends with .xlsx
+      if (!captured.filename || !/\.xlsx$/i.test(captured.filename)) {
+        throw new Error(`expected .xlsx filename, got "${captured.filename}"`);
+      }
 
-      // Parse the CSV and audit per-script es-ES coverage.
-      const rows = parseCsv(csv);
-      const headers = rows[0];
+      const aoa = captured.aoa;
+      const headers = aoa[0];
       const idx = (n) => headers.findIndex(h => String(h).toLowerCase() === n.toLowerCase());
-      const fileCol = idx('FileName');
+      const fileCol   = idx('FileName');
       const localeCol = idx(targetLocale);
-      if (fileCol === -1) throw new Error('exported CSV has no FileName column');
-      if (localeCol === -1) throw new Error(`exported CSV has no ${targetLocale} column`);
+      const genderCol = idx('Gender');
+      if (fileCol === -1) throw new Error('exported workbook has no FileName column');
+      if (localeCol === -1) throw new Error(`exported workbook has no ${targetLocale} column`);
+      if (genderCol === -1) throw new Error('exported workbook has no Gender column');
 
       const perFile = {};
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.every(c => !c)) continue;
+      const genderValues = new Set();
+      for (let i = 1; i < aoa.length; i++) {
+        const row = aoa[i];
+        if (!row || row.every(c => !c && c !== 0)) continue;
         const file = row[fileCol] || '<no-file>';
         const txt  = row[localeCol] || '';
+        const g    = String(row[genderCol] || '').trim();
+        genderValues.add(g);
         if (!perFile[file]) perFile[file] = { total: 0, withTr: 0 };
         perFile[file].total++;
-        if (txt && txt.trim()) perFile[file].withTr++;
+        if (txt && String(txt).trim()) perFile[file].withTr++;
+      }
+
+      // Every gender value must be one of the expanded labels — no blanks,
+      // no single-char codes leaking through.
+      const allowed = new Set(['male', 'female', 'none']);
+      const bad = [...genderValues].filter(g => !allowed.has(g));
+      if (bad.length) {
+        throw new Error(`unexpected Gender values in export: ${JSON.stringify(bad)} (allowed: male/female/none)`);
       }
 
       const fileCount = Object.keys(perFile).length;
       if (fileCount < 2) {
         throw new Error(`expected rows from ≥2 scripts in export, got ${fileCount}: ${Object.keys(perFile).join(', ')}`);
       }
-      // Every script with rows must have non-zero coverage. (100% would be
-      // ideal but tolerate locale-specific gaps in the bundled .json.)
       for (const [f, g] of Object.entries(perFile)) {
         if (g.total > 0 && g.withTr === 0) {
           throw new Error(`script "${f}" has 0/${g.total} translated cells in export — bundle map didn't cover it`);
