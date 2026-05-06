@@ -886,6 +886,240 @@
     if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
   }
 
+  // ----- Flat edit view -----
+  // The dialogue panel switches to this when Edit Mode is on: the entire
+  // current node is expanded into one scrollable view (every line, every
+  // option, every if-branch) so translators can sweep top-to-bottom instead
+  // of clicking through choices. Lives here (not in ui.js) because it's
+  // entirely about translation editing — UID resolution, lookupLine, status
+  // chip, decorateLine. Host hooks supply the AST + speaker formatting.
+
+  // Lazy-create the flat edit view container as a sibling of #transcript.
+  function getFlatViewEl() {
+    let el = document.getElementById('flat-edit-view');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'flat-edit-view';
+    el.className = 'flat-edit-view';
+    const tEl = document.getElementById('transcript');
+    tEl.parentNode.insertBefore(el, tEl.nextSibling);
+    return el;
+  }
+
+  // Render the current node fully expanded for translator editing. Called
+  // from host's redrawTranslationsInPlace whenever Edit Mode is active.
+  function renderFlatEditView() {
+    if (!STATE.hooks) return;
+    const view = getFlatViewEl();
+    view.innerHTML = '';
+    const proj = STATE.hooks.activeProject && STATE.hooks.activeProject();
+    if (!proj) return;
+    // Edit Mode is independent of playback — use the canonical title source
+    // so the flat view follows navigation, not just the runtime.
+    const title = STATE.hooks.currentNodeTitle && STATE.hooks.currentNodeTitle();
+    if (!title) return;
+    const node = proj.nodes.get(title);
+    if (!node) return;
+
+    const header = document.createElement('div');
+    header.className = 'flat-node-header';
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'flat-node-title';
+    titleEl.textContent = title;
+    header.appendChild(titleEl);
+
+    // Bulk status actions for the active node — only meaningful when the
+    // active locale is a target language (not source) and the node has
+    // translatable lines.
+    const perNodeIndex = STATE.hooks.collectPerNodeUidIndex
+      ? STATE.hooks.collectPerNodeUidIndex()
+      : new Map();
+    const nodeUids = perNodeIndex.get(title);
+    const activeLocale = STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
+    if (!isSourceLocale(activeLocale) && nodeUids && nodeUids.size > 0) {
+      const actions = document.createElement('span');
+      actions.className = 'flat-node-actions';
+
+      const approveAll = document.createElement('button');
+      approveAll.type = 'button';
+      approveAll.className = 'flat-bulk-btn approve';
+      approveAll.textContent = t('tr.bulk.approveAll', { n: nodeUids.size });
+      approveAll.title = t('tr.bulk.approveAll.tip');
+      approveAll.addEventListener('click', () => {
+        if (!confirm(t('tr.bulk.confirm.approve', { n: nodeUids.size }))) return;
+        bulkSetStatusForActiveLocale(nodeUids, 'approved');
+      });
+      actions.appendChild(approveAll);
+
+      const clearAll = document.createElement('button');
+      clearAll.type = 'button';
+      clearAll.className = 'flat-bulk-btn clear';
+      clearAll.textContent = t('tr.bulk.clearAll', { n: nodeUids.size });
+      clearAll.title = t('tr.bulk.clearAll.tip');
+      clearAll.addEventListener('click', () => {
+        if (!confirm(t('tr.bulk.confirm.clear', { n: nodeUids.size }))) return;
+        bulkSetStatusForActiveLocale(nodeUids, null);
+      });
+      actions.appendChild(clearAll);
+
+      header.appendChild(actions);
+    }
+
+    view.appendChild(header);
+    renderFlatStatements(view, node.statements, node);
+  }
+
+  // Recursive walker. `nodeCtx` carries nodeIndex for UID computation.
+  function renderFlatStatements(container, statements, nodeCtx) {
+    for (const stmt of statements) {
+      if (stmt.type === 'line') renderFlatLine(container, stmt, nodeCtx);
+      else if (stmt.type === 'choices') renderFlatChoices(container, stmt, nodeCtx);
+      else if (stmt.type === 'if') renderFlatIf(container, stmt, nodeCtx);
+      else renderFlatMeta(container, stmt);
+    }
+  }
+
+  function renderFlatLine(container, stmt, nodeCtx) {
+    const row = document.createElement('div');
+    row.className = 'row row-line flat-row';
+    if (stmt.speaker && STATE.hooks.formatSpeaker && STATE.hooks.renderSpeakerInto) {
+      const sp = document.createElement('span');
+      sp.className = 'speaker';
+      STATE.hooks.renderSpeakerInto(sp, STATE.hooks.formatSpeaker(stmt));
+      row.appendChild(sp);
+      row.appendChild(document.createTextNode(': '));
+    }
+    const original = stmt.text || '';
+    const uid = STATE.hooks.uidFor && STATE.hooks.uidFor(nodeCtx.nodeIndex, stmt.srcLine);
+    const info = uid
+      ? lookupLine(uid, original)
+      : { text: original, status: 'inactive', uid: null };
+    const tx = document.createElement('span');
+    tx.className = 'text';
+    tx.innerHTML = YarnParser.markupToSafeHtml(info.text);
+    row.appendChild(tx);
+    container.appendChild(row);
+    if (info.uid) decorateLine(row, info, original);
+  }
+
+  function renderFlatChoices(container, stmt, nodeCtx) {
+    stmt.items.forEach((item, idx) => {
+      const row = document.createElement('div');
+      row.className = 'row row-choice flat-row';
+      const arrow = document.createElement('span');
+      arrow.className = 'choice-num';
+      arrow.textContent = `→ ${idx + 1}.`;
+      row.appendChild(arrow);
+      const original = item.text || '';
+      const uid = STATE.hooks.uidFor && STATE.hooks.uidFor(nodeCtx.nodeIndex, item.srcLine);
+      const info = uid
+        ? lookupLine(uid, original)
+        : { text: original, status: 'inactive', uid: null };
+      const tx = document.createElement('span');
+      tx.className = 'choice-text';
+      tx.innerHTML = YarnParser.markupToSafeHtml(info.text);
+      row.appendChild(tx);
+      if (item.cond) {
+        const c = document.createElement('span');
+        c.className = 'flat-cond';
+        c.textContent = `(${item.cond})`;
+        row.appendChild(c);
+      }
+      container.appendChild(row);
+      if (info.uid) decorateLine(row, info, original);
+      if (item.body && item.body.length) {
+        const body = document.createElement('div');
+        body.className = 'flat-body';
+        renderFlatStatements(body, item.body, nodeCtx);
+        container.appendChild(body);
+      }
+    });
+  }
+
+  function renderFlatIf(container, stmt, nodeCtx) {
+    const tag = document.createElement('div');
+    tag.className = 'flat-branch';
+    tag.textContent = `«if ${stmt.cond}»`;
+    container.appendChild(tag);
+    const thenBody = document.createElement('div');
+    thenBody.className = 'flat-body';
+    renderFlatStatements(thenBody, stmt.then || [], nodeCtx);
+    container.appendChild(thenBody);
+    if (stmt.else && stmt.else.length) {
+      const elseTag = document.createElement('div');
+      elseTag.className = 'flat-branch';
+      elseTag.textContent = '«else»';
+      container.appendChild(elseTag);
+      const elseBody = document.createElement('div');
+      elseBody.className = 'flat-body';
+      renderFlatStatements(elseBody, stmt.else, nodeCtx);
+      container.appendChild(elseBody);
+    }
+    const endTag = document.createElement('div');
+    endTag.className = 'flat-branch flat-branch-end';
+    endTag.textContent = '«endif»';
+    container.appendChild(endTag);
+  }
+
+  function renderFlatMeta(container, stmt) {
+    const row = document.createElement('div');
+    row.className = 'flat-meta';
+    if (stmt.type === 'end') {
+      row.classList.add('flat-end');
+      row.textContent = '— end —';
+      row.title = t('flat.end.tip');
+    } else if (stmt.type === 'label') {
+      row.classList.add('flat-label');
+      row.dataset.labelName = stmt.name;
+      row.textContent = `@${stmt.name}`;
+    } else if (stmt.type === 'goto' || stmt.type === 'condGoto') {
+      const prefix = stmt.type === 'goto' ? 'goto' : (stmt.isElse ? 'elseGoto' : 'condGoto');
+      row.appendChild(document.createTextNode(`→ ${prefix} `));
+      const target = document.createElement('span');
+      target.className = 'flat-goto-target';
+      target.textContent = stmt.label;
+      target.title = t('flat.goto.tip', { label: stmt.label });
+      target.addEventListener('click', () => jumpToLabel(stmt.label));
+      row.appendChild(target);
+      if (stmt.type === 'condGoto') {
+        row.appendChild(document.createTextNode(` (${stmt.cond})`));
+      }
+    } else if (stmt.type === 'set') {
+      row.textContent = `set ${stmt.variable} = ${stmt.expr}`;
+    } else if (stmt.type === 'wait') {
+      row.textContent = `wait ${stmt.seconds}s`;
+    } else {
+      return;
+    }
+    container.appendChild(row);
+  }
+
+  // Click handler for flat-view goto targets. Scroll to the @label row inside
+  // the current node first; if the label belongs to a different node,
+  // navigate there and re-query once the flat view rebuilds.
+  function jumpToLabel(labelName) {
+    const view = document.getElementById('flat-edit-view');
+    if (!view) return;
+    const sel = `[data-label-name="${CSS.escape(labelName)}"]`;
+    let target = view.querySelector(sel);
+    if (target) { flashFlatTarget(target); return; }
+    const proj = STATE.hooks.activeProject && STATE.hooks.activeProject();
+    const ownerNode = proj && proj.globalLabels && proj.globalLabels.get(labelName);
+    if (!ownerNode) return;  // unknown label — silent no-op
+    if (STATE.hooks.navigateToNode) STATE.hooks.navigateToNode(ownerNode);
+    target = view.querySelector(sel);
+    if (target) flashFlatTarget(target);
+  }
+
+  function flashFlatTarget(el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('flash-target');
+    void el.offsetWidth;       // force restart of CSS animation
+    el.classList.add('flash-target');
+    setTimeout(() => el.classList.remove('flash-target'), 1600);
+  }
+
   // Bulk: apply status to a list of UIDs in the active locale (used by
   // flat-view node header). status = null clears.
   function bulkSetStatusForActiveLocale(uids, status) {
@@ -1167,7 +1401,10 @@
     notifyContextChange: () => updateStats(),
     isActive: () => STATE.translationMode,
     refreshExportStatus,
-    // Status-related public API consumed by ui.js (sidebar, flat-view header).
+    // Flat edit view rendering — host calls this from redrawTranslationsInPlace
+    // when Edit Mode is active.
+    renderFlatEditView,
+    // Status-related public API consumed by ui.js (sidebar).
     bulkSetStatusForActiveLocale,
     perNodeStatsForActiveLocale,
   };
