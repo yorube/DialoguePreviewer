@@ -937,7 +937,7 @@
       : new Map();
     const nodeUids = perNodeIndex.get(title);
     const activeLocale = STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-    if (!isSourceLocale(activeLocale) && nodeUids && nodeUids.size > 0) {
+    if (activeLocale && !isSourceLocale(activeLocale) && nodeUids && nodeUids.size > 0) {
       const actions = document.createElement('span');
       actions.className = 'flat-node-actions';
 
