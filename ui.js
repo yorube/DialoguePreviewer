@@ -1427,10 +1427,10 @@
   //             needsReview, approved}>. Source locales return all-translated.
   function collectPerNodeStats() {
     if (typeof TranslationUI === 'undefined'
-        || !TranslationUI.perNodeStatsForActiveLocale) {
+        || !TranslationUI.getPerNodeStatsForActiveLocale) {
       return new Map();
     }
-    return TranslationUI.perNodeStatsForActiveLocale(collectPerNodeUidIndex());
+    return TranslationUI.getPerNodeStatsForActiveLocale(collectPerNodeUidIndex());
   }
 
   // Build a Map<uid, bundledText> for one locale, where uid uses the en-US
@@ -2173,10 +2173,10 @@
         toggleStatusFilter,
         // Hooks the flat edit view (translation-ui.js) needs to render the
         // current node + handle goto-label clicks across nodes.
-        activeProject,
-        currentNodeTitle,
+        getActiveProject: activeProject,
+        getCurrentNodeTitle: currentNodeTitle,
+        getPerNodeUidIndex: collectPerNodeUidIndex,
         navigateToNode,
-        collectPerNodeUidIndex,
         uidFor,
         formatSpeaker,
         renderSpeakerInto,

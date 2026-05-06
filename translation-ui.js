@@ -912,11 +912,11 @@
     if (!STATE.hooks) return;
     const view = getFlatViewEl();
     view.innerHTML = '';
-    const proj = STATE.hooks.activeProject && STATE.hooks.activeProject();
+    const proj = STATE.hooks.getActiveProject && STATE.hooks.getActiveProject();
     if (!proj) return;
     // Edit Mode is independent of playback — use the canonical title source
     // so the flat view follows navigation, not just the runtime.
-    const title = STATE.hooks.currentNodeTitle && STATE.hooks.currentNodeTitle();
+    const title = STATE.hooks.getCurrentNodeTitle && STATE.hooks.getCurrentNodeTitle();
     if (!title) return;
     const node = proj.nodes.get(title);
     if (!node) return;
@@ -932,8 +932,8 @@
     // Bulk status actions for the active node — only meaningful when the
     // active locale is a target language (not source) and the node has
     // translatable lines.
-    const perNodeIndex = STATE.hooks.collectPerNodeUidIndex
-      ? STATE.hooks.collectPerNodeUidIndex()
+    const perNodeIndex = STATE.hooks.getPerNodeUidIndex
+      ? STATE.hooks.getPerNodeUidIndex()
       : new Map();
     const nodeUids = perNodeIndex.get(title);
     const activeLocale = STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
@@ -1104,7 +1104,7 @@
     const sel = `[data-label-name="${CSS.escape(labelName)}"]`;
     let target = view.querySelector(sel);
     if (target) { flashFlatTarget(target); return; }
-    const proj = STATE.hooks.activeProject && STATE.hooks.activeProject();
+    const proj = STATE.hooks.getActiveProject && STATE.hooks.getActiveProject();
     const ownerNode = proj && proj.globalLabels && proj.globalLabels.get(labelName);
     if (!ownerNode) return;  // unknown label — silent no-op
     if (STATE.hooks.navigateToNode) STATE.hooks.navigateToNode(ownerNode);
@@ -1325,7 +1325,7 @@
   // Per-node stats helper used by the sidebar dot/count rendering. ui.js
   // owns the per-node UID index (it knows the active project's AST); we
   // overlay the per-locale TranslationState on top to get the breakdown.
-  function perNodeStatsForActiveLocale(perNodeUidIndex) {
+  function getPerNodeStatsForActiveLocale(perNodeUidIndex) {
     const out = new Map();
     if (!perNodeUidIndex) return out;
     const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
@@ -1406,6 +1406,6 @@
     renderFlatEditView,
     // Status-related public API consumed by ui.js (sidebar).
     bulkSetStatusForActiveLocale,
-    perNodeStatsForActiveLocale,
+    getPerNodeStatsForActiveLocale,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
