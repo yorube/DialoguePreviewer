@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MBU Yarn Preview</title>
-<link rel="stylesheet" href="style.css?v=i18n-extract">
+<link rel="stylesheet" href="style.css?v=export-extract">
 </head>
 <body>
 <nav class="page-tabs" role="tablist">
@@ -142,18 +142,19 @@
      mechanism style.css already uses. Browsers aggressively cache .js
      responses (especially GitHub Pages' CDN), and without this users on
      a tab they kept open across deploys would silently run old code. -->
-<script src="parser.js?v=i18n-extract"></script>
-<script src="runtime.js?v=i18n-extract"></script>
+<script src="parser.js?v=export-extract"></script>
+<script src="runtime.js?v=export-extract"></script>
 <!-- Translation pipeline (porting v2 YarnFileConverter into the browser) -->
 <script src="xlsx.full.min.js"></script>
 <script src="jszip.min.js"></script>
-<script src="yarn-converter.js?v=i18n-extract"></script>
-<script src="loc-parser.js?v=i18n-extract"></script>
-<script src="loc-writer.js?v=i18n-extract"></script>
-<script src="translation-state.js?v=i18n-extract"></script>
-<script src="translation-ui.js?v=i18n-extract"></script>
-<script src="ui-strings.js?v=i18n-extract"></script>
-<script src="ui-i18n.js?v=i18n-extract"></script>
-<script src="ui.js?v=i18n-extract"></script>
+<script src="yarn-converter.js?v=export-extract"></script>
+<script src="loc-parser.js?v=export-extract"></script>
+<script src="loc-writer.js?v=export-extract"></script>
+<script src="translation-state.js?v=export-extract"></script>
+<script src="translation-export.js?v=export-extract"></script>
+<script src="translation-ui.js?v=export-extract"></script>
+<script src="ui-strings.js?v=export-extract"></script>
+<script src="ui-i18n.js?v=export-extract"></script>
+<script src="ui.js?v=export-extract"></script>
 </body>
 </html>
