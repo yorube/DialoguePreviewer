@@ -145,7 +145,7 @@
       ops.appendChild(expStatus);
     }
 
-    // 對話介面最上方：Edit Mode toggle + 旁邊的 ? 說明按鈕
+    // 對話介面最上方：Edit mode toggle + 旁邊的 ? 說明按鈕
     const modebar = document.getElementById('dialogue-modebar');
     if (modebar) {
       const toggle = document.createElement('button');
@@ -154,14 +154,14 @@
       toggle.type = 'button';
       toggle.dataset.i18n = 'tr.editMode';
       toggle.dataset.i18nTitle = 'tr.editMode.tip';
-      toggle.textContent = '✏️ Translation Edit Mode';
+      toggle.textContent = '✏️ Translation edit mode';
       toggle.addEventListener('click', toggleMode);
       modebar.appendChild(toggle);
 
-      // ? — opens a dedicated Edit Mode help modal (separate from the
-      // global ? in the top bar). Content is Edit Mode-specific: flat
+      // ? — opens a dedicated Edit mode help modal (separate from the
+      // global ? in the top bar). Content is Edit mode-specific: flat
       // view symbols, the inline editor flow, clickable goto labels —
-      // things only relevant once you're already in Edit Mode.
+      // things only relevant once you're already in Edit mode.
       const help = document.createElement('button');
       help.id = 't-mode-help';
       help.className = 'help-btn t-mode-help';
@@ -184,7 +184,7 @@
     }
   }
 
-  // ----- Dedicated Edit Mode help modal -----
+  // ----- Dedicated Edit mode help modal -----
 
   function openEditModeHelp() {
     let overlay = document.getElementById('t-editmode-help-overlay');
@@ -215,7 +215,7 @@
 
     const h2 = document.createElement('h2');
     h2.dataset.i18n = 'tr.editMode.help.title';
-    h2.textContent = 'Edit Mode help';
+    h2.textContent = 'Edit mode help';
 
     const body = document.createElement('div');
     body.className = 'help-body';
@@ -236,7 +236,7 @@
     return overlay;
   }
 
-  // Esc closes any visible help overlay (this Edit Mode one + the global ?).
+  // Esc closes any visible help overlay (this Edit mode one + the global ?).
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const overlay = document.getElementById('t-editmode-help-overlay');
@@ -673,8 +673,8 @@
   //   2. ts.baseline     使用者匯入的 CSV
   //   3. bundle .json    該 locale 隨專案 ship 的鎖定譯文,且*不等於 en-US*
   //   4. ''              真的沒譯 (含 bundle 等於 en-US 的 fallback 情況)
-  // 上傳的譯文 + 站內編輯永遠都覆蓋顯示（跟 Edit Mode 無關）。
-  // Edit Mode 只控制 ✏️ 按鈕 + 視覺裝飾（dim/border）。
+  // 上傳的譯文 + 站內編輯永遠都覆蓋顯示（跟 Edit mode 無關）。
+  // Edit mode 只控制 ✏️ 按鈕 + 視覺裝飾（dim/border）。
   // 注意:judging "bundle 算翻譯過" 不能只看 originalText 非空 —
   // 進行中的 locale (fr-FR mid-translation) 的 bundle 對未翻譯行常常
   // 保留英文 fallback,只看「非空」會 100% 全當翻譯過。改查 bundle
@@ -702,7 +702,7 @@
     if (!info || !info.uid) return;
     rowEl.dataset.tUid = info.uid;
     rowEl.dataset.tOriginal = originalText;
-    // Edit Mode 才顯示視覺裝飾與 ✏️ 編輯按鈕；非 Edit Mode 只悄悄帶 data 屬性
+    // Edit mode 才顯示視覺裝飾與 ✏️ 編輯按鈕；非 Edit mode 只悄悄帶 data 屬性
     if (!STATE.translationMode) return;
     rowEl.classList.add('t-line');
     if (info.status === 'untranslated') rowEl.classList.add('t-untranslated');
@@ -887,7 +887,7 @@
   }
 
   // ----- Flat edit view -----
-  // The dialogue panel switches to this when Edit Mode is on: the entire
+  // The dialogue panel switches to this when Edit mode is on: the entire
   // current node is expanded into one scrollable view (every line, every
   // option, every if-branch) so translators can sweep top-to-bottom instead
   // of clicking through choices. Lives here (not in ui.js) because it's
@@ -907,14 +907,14 @@
   }
 
   // Render the current node fully expanded for translator editing. Called
-  // from host's redrawTranslationsInPlace whenever Edit Mode is active.
+  // from host's redrawTranslationsInPlace whenever Edit mode is active.
   function renderFlatEditView() {
     if (!STATE.hooks) return;
     const view = getFlatViewEl();
     view.innerHTML = '';
     const proj = STATE.hooks.getActiveProject && STATE.hooks.getActiveProject();
     if (!proj) return;
-    // Edit Mode is independent of playback — use the canonical title source
+    // Edit mode is independent of playback — use the canonical title source
     // so the flat view follows navigation, not just the runtime.
     const title = STATE.hooks.getCurrentNodeTitle && STATE.hooks.getCurrentNodeTitle();
     if (!title) return;
@@ -1402,7 +1402,7 @@
     isActive: () => STATE.translationMode,
     refreshExportStatus,
     // Flat edit view rendering — host calls this from redrawTranslationsInPlace
-    // when Edit Mode is active.
+    // when Edit mode is active.
     renderFlatEditView,
     // Status-related public API consumed by ui.js (sidebar).
     bulkSetStatusForActiveLocale,

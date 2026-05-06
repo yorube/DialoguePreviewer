@@ -185,7 +185,7 @@
   function renderShell() {
     return `
     <header class="topbar topbar-ui-strings">
-      <span class="brand" data-i18n="ui.brand">UI Strings</span>
+      <span class="brand" data-i18n="ui.brand">UI strings</span>
       <label class="ctrl ctrl-import">
         <span data-i18n="ui.import">📥 Import .xlsx</span>
         <input type="file" id="ui-strings-import" accept=".xlsx,.xls">

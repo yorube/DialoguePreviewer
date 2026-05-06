@@ -1247,9 +1247,9 @@
   }
 
   // 把 transcript 行的譯文/原文挑出來：
-  //   - 已上傳譯文或站內編輯：永遠覆蓋顯示（跟 Edit Mode 無關）
+  //   - 已上傳譯文或站內編輯：永遠覆蓋顯示（跟 Edit mode 無關）
   //   - 都沒有：用 runtime 給的原文（bundled JSON 內的譯文）
-  // Edit Mode 只負責 ✏️ 按鈕 + 視覺裝飾（在 decorateLine 內判斷）
+  // Edit mode 只負責 ✏️ 按鈕 + 視覺裝飾（在 decorateLine 內判斷）
   function getDisplayedText(originalText, srcLine) {
     if (typeof TranslationUI === 'undefined') {
       return { text: originalText, info: null };
@@ -1313,10 +1313,10 @@
   }
 
   // Refresh translation visuals + swap between runtime preview and flat edit view.
-  // Called on Edit Mode toggle, inline edit confirm, locale upload, and node change.
-  // - When Edit Mode is ON: hide transcript, render the current node fully expanded
+  // Called on Edit mode toggle, inline edit confirm, locale upload, and node change.
+  // - When Edit mode is ON: hide transcript, render the current node fully expanded
   //   (every line, every option, every if-branch) in the flat edit view.
-  // - When Edit Mode is OFF: hide flat view, runtime preview comes back unchanged.
+  // - When Edit mode is OFF: hide flat view, runtime preview comes back unchanged.
   // Existing transcript rows are also refreshed in place so edits made in flat view
   // appear when the user switches back.
   function redrawTranslationsInPlace() {
@@ -1864,7 +1864,7 @@
     renderVars();              // declared defaults + user overrides
     refreshPlaybackUi();       // toggle play vs step-back/replay enable
     renderEmptyState();        // "press ▶ to start" placeholder
-    // Edit Mode follows the active node directly — it never needed the
+    // Edit mode follows the active node directly — it never needed the
     // runtime, so refresh on navigation.
     refreshAuxModes();
   }
@@ -2124,7 +2124,7 @@
         t,                                            // 翻譯字串
         applyI18n,                                    // 注入新 DOM 後重跑 i18n
         // Non-destructive redraw: refresh translation visuals on existing
-        // transcript rows + pending choices. Toggling Edit Mode or saving an
+        // transcript rows + pending choices. Toggling Edit mode or saving an
         // inline edit no longer rewinds the dialogue. Sidebar dots / counts
         // are derived from the same translation data so refresh together.
         requestRedraw: () => {
@@ -2235,7 +2235,7 @@
   // §17 Bootstrap
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Top-level page tabs (Dialogue / UI Strings). Body class drives which
+  // Top-level page tabs (Dialogue / UI strings). Body class drives which
   // page is visible; CSS in ui-strings.js handles UI-strings-specific show
   // / hide. Persisted across reloads via yp.activePage.
   function initPageTabs() {

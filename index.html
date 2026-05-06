@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MBU Yarn Preview</title>
-<link rel="stylesheet" href="style.css?v=hook-normalize">
+<link rel="stylesheet" href="style.css?v=mozilla-style">
 </head>
 <body>
 <nav class="page-tabs" role="tablist">
   <button class="page-tab active" data-page="dialogue" type="button" role="tab" aria-selected="true" data-i18n="page.dialogue">💬 Dialogue</button>
-  <button class="page-tab" data-page="ui-strings" type="button" role="tab" aria-selected="false" data-i18n="page.uiStrings">🧩 UI Strings</button>
+  <button class="page-tab" data-page="ui-strings" type="button" role="tab" aria-selected="false" data-i18n="page.uiStrings">🧩 UI strings</button>
 </nav>
 
 <div id="page-dialogue" class="page page-dialogue">
@@ -58,7 +58,7 @@
   <aside class="sidebar">
     <!-- UID Searcher：貼一段 UID（{guid}-{nodeIndex}-{srcLine}）後跳到對應 script + node -->
     <div class="sidebar-title">
-      <span data-i18n="sidebar.uidSearch">UID Search</span>
+      <span data-i18n="sidebar.uidSearch">UID search</span>
     </div>
     <form id="uid-search-form" class="uid-search">
       <input id="uid-search-input" type="text" autocomplete="off" spellcheck="false"
@@ -114,7 +114,7 @@
     <header class="dialogue-header">
       <h1 id="current-node">—</h1>
     </header>
-    <!-- Edit Mode 切換放在 node 標題下方一行 -->
+    <!-- Edit mode 切換放在 node 標題下方一行 -->
     <div class="dialogue-modebar" id="dialogue-modebar"></div>
     <div class="dialogue-toolbar">
       <button id="play-btn" class="action-btn primary" type="button"
@@ -142,19 +142,19 @@
      mechanism style.css already uses. Browsers aggressively cache .js
      responses (especially GitHub Pages' CDN), and without this users on
      a tab they kept open across deploys would silently run old code. -->
-<script src="parser.js?v=hook-normalize"></script>
-<script src="runtime.js?v=hook-normalize"></script>
+<script src="parser.js?v=mozilla-style"></script>
+<script src="runtime.js?v=mozilla-style"></script>
 <!-- Translation pipeline (porting v2 YarnFileConverter into the browser) -->
 <script src="xlsx.full.min.js"></script>
 <script src="jszip.min.js"></script>
-<script src="yarn-converter.js?v=hook-normalize"></script>
-<script src="loc-parser.js?v=hook-normalize"></script>
-<script src="loc-writer.js?v=hook-normalize"></script>
-<script src="translation-state.js?v=hook-normalize"></script>
-<script src="translation-export.js?v=hook-normalize"></script>
-<script src="translation-ui.js?v=hook-normalize"></script>
-<script src="ui-strings.js?v=hook-normalize"></script>
-<script src="ui-i18n.js?v=hook-normalize"></script>
-<script src="ui.js?v=hook-normalize"></script>
+<script src="yarn-converter.js?v=mozilla-style"></script>
+<script src="loc-parser.js?v=mozilla-style"></script>
+<script src="loc-writer.js?v=mozilla-style"></script>
+<script src="translation-state.js?v=mozilla-style"></script>
+<script src="translation-export.js?v=mozilla-style"></script>
+<script src="translation-ui.js?v=mozilla-style"></script>
+<script src="ui-strings.js?v=mozilla-style"></script>
+<script src="ui-i18n.js?v=mozilla-style"></script>
+<script src="ui.js?v=mozilla-style"></script>
 </body>
 </html>

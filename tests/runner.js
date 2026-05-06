@@ -149,8 +149,8 @@ async function runIntegrationSuite(page) {
     if (fired !== 3) throw new Error(`expected 3 fires, got ${fired}`);
   });
 
-  await run('UI Strings page text re-translates on lang switch', async () => {
-    // Switch to UI Strings page, observe brand label, flip lang, re-check.
+  await run('UI strings page text re-translates on lang switch', async () => {
+    // Switch to UI strings page, observe brand label, flip lang, re-check.
     await page.evaluate(() => {
       document.querySelector('[data-page="ui-strings"]').click();
     });
@@ -165,7 +165,7 @@ async function runIntegrationSuite(page) {
       sel.value = 'en'; sel.dispatchEvent(new Event('change'));
     });
     const enBrand = (await page.locator('.topbar-ui-strings .brand').textContent()).trim();
-    if (!enBrand.includes('UI Strings')) throw new Error(`brand @en: "${enBrand}"`);
+    if (!enBrand.includes('UI strings')) throw new Error(`brand @en: "${enBrand}"`);
 
     // Flip to zh
     await page.evaluate(() => {
@@ -304,7 +304,7 @@ async function runIntegrationSuite(page) {
     // dialogue to its natural end with a click loop is fragile against
     // long / cross-node scripts. Same code path either way.)
 
-    await run('Edit Mode toggle adds body.t-edit-mode class', async () => {
+    await run('Edit mode toggle adds body.t-edit-mode class', async () => {
       // First navigate to a fresh node to clear any end-state
       await selectFirstNode();
       const beforeOn = await page.evaluate(() => document.body.classList.contains('t-edit-mode'));
@@ -320,7 +320,7 @@ async function runIntegrationSuite(page) {
       );
       // flat view should now exist
       const flatExists = await page.locator('#flat-edit-view').count();
-      if (flatExists !== 1) throw new Error('flat-edit-view should exist in Edit Mode');
+      if (flatExists !== 1) throw new Error('flat-edit-view should exist in Edit mode');
       // Toggle off
       await page.click('#t-mode-toggle');
       await page.waitForFunction(
@@ -342,7 +342,7 @@ async function runIntegrationSuite(page) {
       );
     });
 
-    await run('UI Strings page tab toggles body class', async () => {
+    await run('UI strings page tab toggles body class', async () => {
       await page.evaluate(() => document.querySelector('[data-page="ui-strings"]').click());
       await page.waitForFunction(
         () => document.body.classList.contains('page-ui-strings'),
@@ -572,7 +572,7 @@ async function runIntegrationSuite(page) {
         { timeout: 5000 }
       );
       await page.evaluate(() => document.querySelector('#node-list li').click());
-      // Turn on Edit Mode → flat view appears with chips.
+      // Turn on Edit mode → flat view appears with chips.
       await page.click('#t-mode-toggle');
       await page.waitForFunction(
         () => document.body.classList.contains('t-edit-mode'),
@@ -603,7 +603,7 @@ async function runIntegrationSuite(page) {
       });
       if (!targetLocale) return;
       // Already on a target locale + node from the previous test, but
-      // re-enter Edit Mode to render the header.
+      // re-enter Edit mode to render the header.
       await page.click('#t-mode-toggle');
       await page.waitForFunction(
         () => document.body.classList.contains('t-edit-mode'),

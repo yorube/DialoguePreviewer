@@ -11,7 +11,7 @@ For the bare-minimum starter, see [QUICKSTART.md](QUICKSTART.md).
 A tab strip at the very top switches between two independent tools:
 
 - **💬 Dialogue / 對話**. Yarn dialogue files, organised by script and node.
-- **🧩 UI Strings / UI 字串**. The multi-sheet `翻譯對照表` xlsx for in-game UI copy (item names, sign descriptions, menu copy, character names).
+- **🧩 UI strings / UI 字串**. The multi-sheet `翻譯對照表` xlsx for in-game UI copy (item names, sign descriptions, menu copy, character names).
 
 Each page has its own Import / Export. They don't share state. Your last-active page is remembered across reloads.
 
@@ -55,7 +55,7 @@ Click any node to play it. To advance:
 - Choices: click one or press its number key (1 to 9). Your choice gets a blue quoted line in the transcript.
 - **← Step back** undoes one line. **↶** at the right end of any past line jumps back to that point. **⟳ Replay this node** restarts.
 
-### ✏️ Translation Edit Mode
+### ✏️ Translation edit mode
 
 Above the dialogue area. With a target locale selected, click to enter. The dialogue area swaps to a **flat editing view**: every line, every choice option, every `«if»` branch of the current node is laid out top-to-bottom. You sweep through it instead of clicking choices.
 
@@ -70,7 +70,7 @@ Symbols in the flat view:
 - `— end —` (red badge). Dialogue ends here. Anything below in the same indent isn't reachable.
 - Dim grey monospace lines (`set $foo = 1`, `wait 0.5s`, `→ goto X`). Runtime side-effects shown for context. Not editable.
 
-The **?** next to the Edit Mode toggle opens a dedicated guide for these symbols.
+The **?** next to the Edit mode toggle opens a dedicated guide for these symbols.
 
 ### Import / Export
 
@@ -79,13 +79,13 @@ The **?** next to the Edit Mode toggle opens a dedicated guide for these symbols
 
 ---
 
-## UI Strings page
+## UI strings page
 
 For the multi-sheet `翻譯對照表 (*).xlsx`. Columns: `Key | zh-TW | zh-CN | en-US | ja-JP | it-IT | ru-RU | es-ES | fr-FR`.
 
-- **📥 Import .xlsx**. Loads the whole workbook. Replaces any UI Strings work currently in the browser.
+- **📥 Import .xlsx**. Loads the whole workbook. Replaces any UI strings work currently in the browser.
 - **Sheet tabs** across the top mirror the Excel sheet order. Click to switch.
-- **Click any cell** to edit (any language column; UI Strings has no source-locked language). `Ctrl/Cmd + Enter` saves. `Esc` cancels.
+- **Click any cell** to edit (any language column; UI strings has no source-locked language). `Ctrl/Cmd + Enter` saves. `Esc` cancels.
 - **Filter** narrows visible rows by Key within the active sheet only.
 - **💾 Export .xlsx** rebuilds the workbook with your edits. Sheet order, columns, and every original row (including `//` divider rows) preserved exactly. Re-uploadable as-is.
 - **🗑 Clear** drops everything from the browser cache. Only do this after exporting.
@@ -109,7 +109,7 @@ Rows whose Key starts with `//` (like `//第一日`) are visual section headers.
 | Imported file + your edits | Browser cache | **No** | **No** |
 | Translator notes (cache) | Browser cache | **No** | **No** |
 | Translator notes (in exported file) | The file you saved | **Yes** | **Yes** |
-| UI Strings workbook + edits | Browser cache | **No** | **No** |
+| UI strings workbook + edits | Browser cache | **No** | **No** |
 | Layout, font size, UI language | Browser cache | Mostly yes | **No** |
 | **Exported `.csv` / `.xlsx`** | **The file you saved** | **Yes** | **Yes** |
 
@@ -141,4 +141,4 @@ Shortcuts pause while typing in any input or textarea.
 ## In-app help
 
 - Top-right **?**. Overview of every feature.
-- **?** next to the Edit Mode toggle. Edit Mode specifics: flat view symbols, the inline editor, clickable goto labels.
+- **?** next to the Edit mode toggle. Edit mode specifics: flat view symbols, the inline editor, clickable goto labels.

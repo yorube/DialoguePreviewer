@@ -9,7 +9,7 @@
   'use strict';
 
   // Map speakers.json single-char codes ('M' / 'F' / 'N') to the long-form
-  // labels written into the Gender column. Anything unrecognised — narrators,
+  // labels written into the Gender column. Anything unrecognized — narrators,
   // unmarked NPCs, missing entries — falls through to 'none' so the column
   // is never blank.
   function genderLabel(raw) {

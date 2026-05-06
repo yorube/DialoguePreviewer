@@ -6,7 +6,7 @@
    - Looser density: 1.65 line-height, +25% padding, generous whitespace
    - Warm professional accent: amber-orange (oklch warm), semantic green/red
    - 4pt spacing grid, type scale 10.5/12/13/14/15/18
-   - Translation flow as the visual hotspot (Edit Mode → Untranslated → Export)
+   - Translation flow as the visual hotspot (Edit mode → Untranslated → Export)
    ============================================================================ */
 
 :root {
@@ -1257,7 +1257,7 @@ body.dragging-splitter * { user-select: none; }
   color: var(--warn);
 }
 
-/* Edit Mode toggle — single-element switch.
+/* Edit mode toggle — single-element switch.
    Track is the ::before; thumb is drawn as a radial-gradient inside it
    so there's only one positioned element to align (no thumb-floats-away bug). */
 .dialogue-modebar {
@@ -1467,7 +1467,7 @@ input[type="file"].t-file { display: none; }
 .t-export-status.clean { color: var(--good); }
 
 /* ============================================================================
-   Edit Mode flat view — entire node expanded for translator editing
+   Edit mode flat view — entire node expanded for translator editing
    When body.t-edit-mode is on, the runtime transcript hides and the
    sibling #flat-edit-view shows. ui.js owns the body class; this CSS owns
    the visual treatment.
@@ -1613,7 +1613,7 @@ body.t-edit-mode .flat-edit-view { display: block; }
 }
 .help-btn:hover { background: var(--accent-faint); border-color: var(--accent); color: var(--accent); }
 
-/* Smaller help-btn variant injected by translation-ui.js next to the Edit Mode toggle. */
+/* Smaller help-btn variant injected by translation-ui.js next to the Edit mode toggle. */
 .help-btn.t-mode-help {
   margin-left: 0;
   width: 22px;
