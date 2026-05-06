@@ -262,13 +262,29 @@
     // writing into a merge-absorbed cell corrupts the file in Excel.
     detectMergeConflicts(xmlDoc, source.rows.length, patchCols);
 
+    // Build row + cell index maps ONCE for O(1) lookups during the patch
+    // loop. Without these, getOrCreateCell would linear-scan every row /
+    // cell per update — for a typical translator xlsx (~10k rows × a few
+    // cols/row patched) that's hundreds of millions of DOM ops and the
+    // browser hangs visibly under "Preparing export…".
+    const rowIndex = new Map();      // rowNum (string) → row element
+    const cellIndex = new WeakMap(); // row element → Map<cellRef, cell el>
+    for (const row of childrenByTag(sheetData, SS_NS, 'row')) {
+      rowIndex.set(row.getAttribute('r'), row);
+      const cells = new Map();
+      for (const cell of childrenByTag(row, SS_NS, 'c')) {
+        cells.set(cell.getAttribute('r'), cell);
+      }
+      cellIndex.set(row, cells);
+    }
+
     // Apply translation + status to source.rows (mirrors the rebuild path
     // so behavior is identical re: empty-cell-clearing, status removal etc.).
     const filledRows = applyTranslationsToRows(source, mergedTranslations, statuses);
 
     // Patch header row (row 1) for newly added columns.
     for (let c = originalCols; c < source.headers.length; c++) {
-      const cell = getOrCreateCell(xmlDoc, sheetData, 1, c);
+      const cell = getOrCreateCell(xmlDoc, sheetData, 1, c, rowIndex, cellIndex);
       setInlineString(xmlDoc, cell, source.headers[c] || '');
     }
 
@@ -278,7 +294,7 @@
       const row = filledRows[i];
       for (const colIdx of patchCols) {
         const value = row[colIdx] != null ? row[colIdx] : '';
-        const cell = getOrCreateCell(xmlDoc, sheetData, excelRow, colIdx);
+        const cell = getOrCreateCell(xmlDoc, sheetData, excelRow, colIdx, rowIndex, cellIndex);
         setInlineString(xmlDoc, cell, String(value));
       }
     }
@@ -363,34 +379,33 @@
     cellEl.appendChild(is);
   }
 
-  function getOrCreateCell(xmlDoc, sheetData, excelRow, colIdx) {
+  // O(1) row+cell lookup via the pre-built indexes. Inserts in numeric
+  // order when creating new rows / cells (those re-walk children, but
+  // creation is rare on translator xlsx — almost every patch hits an
+  // existing row / cell and skips the linear-cost branch).
+  function getOrCreateCell(xmlDoc, sheetData, excelRow, colIdx, rowIndex, cellIndex) {
     const colLetter = colLetterFromIndex(colIdx);
     const cellRef = colLetter + excelRow;
+    const rowKey = String(excelRow);
 
-    // Find row by r attribute. (Rows MAY be missing for sparsely-populated
-    // sheets; insert in numeric order if so.)
-    let row = null;
-    const rowEls = childrenByTag(sheetData, SS_NS, 'row');
-    for (const r of rowEls) {
-      if (r.getAttribute('r') === String(excelRow)) { row = r; break; }
-    }
+    let row = rowIndex.get(rowKey);
     if (!row) {
       row = xmlDoc.createElementNS(SS_NS, 'row');
-      row.setAttribute('r', String(excelRow));
-      insertNodeInOrder(sheetData, row, rowEls,
+      row.setAttribute('r', rowKey);
+      insertNodeInOrder(sheetData, row, childrenByTag(sheetData, SS_NS, 'row'),
         (a, b) => parseInt(a.getAttribute('r'), 10) - parseInt(b.getAttribute('r'), 10));
+      rowIndex.set(rowKey, row);
+      cellIndex.set(row, new Map());
     }
 
-    let cell = null;
-    const cellEls = childrenByTag(row, SS_NS, 'c');
-    for (const c of cellEls) {
-      if (c.getAttribute('r') === cellRef) { cell = c; break; }
-    }
+    const cells = cellIndex.get(row);
+    let cell = cells.get(cellRef);
     if (!cell) {
       cell = xmlDoc.createElementNS(SS_NS, 'c');
       cell.setAttribute('r', cellRef);
-      insertNodeInOrder(row, cell, cellEls,
+      insertNodeInOrder(row, cell, childrenByTag(row, SS_NS, 'c'),
         (a, b) => colNumFromRef(a.getAttribute('r')) - colNumFromRef(b.getAttribute('r')));
+      cells.set(cellRef, cell);
     }
     return cell;
   }

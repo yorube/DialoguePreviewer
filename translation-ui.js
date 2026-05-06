@@ -998,50 +998,59 @@
     }
 
     try {
-      // Pre-load every (group, locale) the export will need so the CSV
-      // covers all scripts in the manifest, not just the ones the user
-      // has happened to click through. ensureAllGroupsLoadedFor swallows
-      // per-script failures (manifest typos, network blips) so a single
-      // bad file doesn't kill the export.
-      if (STATE.hooks && STATE.hooks.ensureAllGroupsLoadedFor) {
-        await STATE.hooks.ensureAllGroupsLoadedFor(activeLocale);
-      }
-
       // getOrCreateState (not raw .get) so a fresh page load that hasn't yet
       // touched this locale still pulls the persisted overrides + source out
       // of localStorage. Without this the export would silently produce a
       // CSV with empty translation columns.
       const ts = getOrCreateState(activeLocale);
+      const uploadedSource = ts ? ts.getSource() : null;
+      // If we'll go through the surgical-patch path we DON'T need the
+      // ensureAllGroupsLoadedFor pre-fetch — the user's uploaded xlsx
+      // already has every row baked in, and the bundle-all-groups merge
+      // only matters for the synthetic / rebuild path that emits rows
+      // for any-loaded-group. Skipping this avoids ~38 file fetches on
+      // typical projects (19 scripts × en-US + target locale) which is
+      // both slow and entirely wasted work.
+      const willPatch = !!(
+        uploadedSource &&
+        uploadedSource.format === 'xlsx' &&
+        uploadedSource.originalArrayBuffer &&
+        typeof JSZip !== 'undefined'
+      );
+
+      if (!willPatch && STATE.hooks && STATE.hooks.ensureAllGroupsLoadedFor) {
+        await STATE.hooks.ensureAllGroupsLoadedFor(activeLocale);
+      }
+
       // If the user uploaded a file we keep their original format byte-for-byte.
       // Otherwise (inline-edits-only OR locked-locale-no-import) we synthesize
       // a CSV from the en-US project AST so they can still download progress.
-      let source = ts ? ts.getSource() : null;
-      if (source) {
+      let source;
+      if (uploadedSource) {
         // Add FileName / NodeTitle / Notes / ReviewStatus columns so notes
         // and statuses travel with the export. No-op when the source already
         // has them and the relevant data is empty.
-        source = augmentSourceForExport(source);
+        source = augmentSourceForExport(uploadedSource);
       } else {
         source = buildSyntheticSource(activeLocale);
         if (!source) { alert(t('tr.alert.noBaseline')); return; }
       }
 
       const merged = ts ? ts.buildMergedMap() : new Map();
-      // Fold the locale's bundled .json text (across EVERY loaded group,
-      // not just the active one) into merged so locked-locale exports
-      // include the actual translations even when the user hasn't
-      // imported a CSV. ts entries take priority — once an import or
-      // inline edit exists for a uid, that wins. This makes the
-      // "no-import → export → edit externally → re-import" round-trip
-      // work for any locale × any script, not just ones already touched
-      // by an import.
-      const bundleHook = STATE.hooks && (
-        STATE.hooks.getLocaleBundleMapAllGroups || STATE.hooks.getLocaleBundleMap
-      );
-      if (bundleHook) {
-        const bundle = bundleHook(activeLocale);
-        for (const [uid, text] of bundle) {
-          if (!merged.has(uid)) merged.set(uid, text);
+      // Fold the locale's bundled .json text into merged so locked-locale
+      // exports include the actual translations even when the user hasn't
+      // imported a CSV. ts entries take priority. Skipped for the patch
+      // path — the user's xlsx already carries its own translations and
+      // ts mirrors them (round-trip is exact, bundle would be redundant).
+      if (!willPatch) {
+        const bundleHook = STATE.hooks && (
+          STATE.hooks.getLocaleBundleMapAllGroups || STATE.hooks.getLocaleBundleMap
+        );
+        if (bundleHook) {
+          const bundle = bundleHook(activeLocale);
+          for (const [uid, text] of bundle) {
+            if (!merged.has(uid)) merged.set(uid, text);
+          }
         }
       }
       const statuses = ts ? ts.getStatusMap() : new Map();
