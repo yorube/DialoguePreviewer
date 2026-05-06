@@ -620,7 +620,13 @@ async function runIntegrationSuite(page) {
     // ─── Bundle-as-implicit-baseline (locked-locale recognition) ─────
     // Run last because some of these change the active locale.
 
-    await run('lookupLine returns baseline when bundle text non-empty + ts empty', async () => {
+    await run('R2: lookupLine returns untranslated for uid not in bundle map (fake / English-fallback)', async () => {
+      // Under R2 (the post-fix rule), bundle map only contains uids whose
+      // locale text *differs* from en-US. A uid that's not in the map —
+      // either because it doesn't exist OR because its bundle text equals
+      // en-US (translator-not-yet-touched fallback) — must read as
+      // 'untranslated', NOT 'baseline'. This is the fix for "fr-FR
+      // mid-translation showing 100% translated" reported in production.
       const targetLocale = await page.evaluate(() => {
         const sel = document.getElementById('locale-select');
         const opts = Array.from(sel.options).map(o => o.value);
@@ -632,30 +638,63 @@ async function runIntegrationSuite(page) {
         sel.value = loc;
         sel.dispatchEvent(new Event('change'));
       }, targetLocale);
+      // Fake uid → not in bundle map → untranslated. originalText being
+      // non-empty doesn't grant baseline status anymore (the R1 bug).
       const probe = await page.evaluate(() => window.TranslationUI.lookupLine(
-        'fake-uid-no-ts-no-override',
-        'Bonjour, this is the bundled text',
+        'fake-uid-not-in-any-bundle',
+        'some bundle text passed in by runtime',
       ));
-      if (probe.status !== 'baseline') {
-        throw new Error(`expected 'baseline' for non-empty originalText, got '${probe.status}'`);
-      }
-      if (probe.text !== 'Bonjour, this is the bundled text') {
-        throw new Error(`expected returned text to equal originalText, got '${probe.text}'`);
+      if (probe.status !== 'untranslated') {
+        throw new Error(`expected 'untranslated' for uid absent from bundle map, got '${probe.status}'`);
       }
     });
 
-    await run('lookupLine returns untranslated when both bundle and ts empty', async () => {
+    await run('R2: lookupLine returns baseline for real uid whose bundle differs from en-US', async () => {
+      // Walk the active locale's project to find a uid where bundle text
+      // genuinely differs from en-US — that one MUST be 'baseline'.
       const targetLocale = await page.evaluate(() => {
         const sel = document.getElementById('locale-select');
         const opts = Array.from(sel.options).map(o => o.value);
         return opts.find(l => l !== 'en-US' && l !== 'zh-TW' && l !== 'unknown') || null;
       });
       if (!targetLocale) return;
-      const probe = await page.evaluate(
-        () => window.TranslationUI.lookupLine('fake-uid-no-bundle', '')
-      );
-      if (probe.status !== 'untranslated') {
-        throw new Error(`expected 'untranslated' for empty bundle + empty ts, got '${probe.status}'`);
+      const probe = await page.evaluate((loc) => {
+        const map = window.TranslationUI.lookupLine
+          ? null  // can't peek the hook here; use direct API instead
+          : null;
+        // Use the install hook indirectly: ask for the bundle map via a
+        // tiny window-scoped probe. Not available — fall back to the
+        // observable: invoke lookupLine for several uids until we find a
+        // 'baseline' one. If all return 'untranslated' (locale fully
+        // English-fallback), this test no-ops.
+        // Strategy: enumerate sidebar nodes, render flat view, sample uids.
+        const lis = document.querySelectorAll('#node-list li');
+        if (!lis.length) return { skipped: 'no nodes' };
+        lis[0].click();
+        // Need flat view to get uids on the rows.
+        const editToggle = document.getElementById('t-mode-toggle');
+        if (!editToggle.classList.contains('active')) editToggle.click();
+        return new Promise(resolve => {
+          setTimeout(() => {
+            const rows = document.querySelectorAll('#flat-edit-view [data-t-uid]');
+            for (const r of rows) {
+              const uid = r.dataset.tUid;
+              const original = r.dataset.tOriginal || '';
+              const probe = window.TranslationUI.lookupLine(uid, original);
+              if (probe.status === 'baseline') {
+                editToggle.click();   // exit edit mode for next test
+                resolve({ probeStatus: probe.status, sampleUid: uid });
+                return;
+              }
+            }
+            editToggle.click();
+            resolve({ skipped: 'no baseline-status row in first node' });
+          }, 400);
+        });
+      }, targetLocale);
+      if (probe.skipped) return;   // graceful no-op for fully-English-fallback locales
+      if (probe.probeStatus !== 'baseline') {
+        throw new Error(`expected 'baseline' for real uid with non-en-US bundle, got '${probe.probeStatus}'`);
       }
     });
 

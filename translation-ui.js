@@ -675,10 +675,14 @@
   // 顯示優先級鏈 (上→下):
   //   1. ts.override     站內 inline edit
   //   2. ts.baseline     使用者匯入的 CSV
-  //   3. bundle .json    該 locale 隨專案 ship 的鎖定譯文 (= originalText)
-  //   4. ''              真的沒譯
+  //   3. bundle .json    該 locale 隨專案 ship 的鎖定譯文,且*不等於 en-US*
+  //   4. ''              真的沒譯 (含 bundle 等於 en-US 的 fallback 情況)
   // 上傳的譯文 + 站內編輯永遠都覆蓋顯示（跟 Edit Mode 無關）。
   // Edit Mode 只控制 ✏️ 按鈕 + 視覺裝飾（dim/border）。
+  // 注意:judging "bundle 算翻譯過" 不能只看 originalText 非空 —
+  // 進行中的 locale (fr-FR mid-translation) 的 bundle 對未翻譯行常常
+  // 保留英文 fallback,只看「非空」會 100% 全當翻譯過。改查 bundle
+  // map (collectLocaleBundleMap 已經把英文 fallback 過濾掉了)。
   function lookupLine(uid, originalText) {
     const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
     if (!activeLocale) return { text: originalText, status: 'inactive', uid };
@@ -689,11 +693,10 @@
     if (text != null && text !== '') {
       return { text, status: ts.source(uid), uid };
     }
-    // Bundled locale .json text (passed in via originalText from the
-    // runtime / flat view) counts as implicit baseline when non-empty —
-    // it's the project's locked translation, on equal footing with an
-    // imported CSV baseline for status purposes.
-    if (originalText && originalText !== '') {
+    const bundleMap = STATE.hooks.getLocaleBundleMap
+      ? STATE.hooks.getLocaleBundleMap(activeLocale)
+      : null;
+    if (bundleMap && bundleMap.has(uid)) {
       return { text: originalText, status: 'baseline', uid };
     }
     return { text: originalText, status: 'untranslated', uid };
@@ -1337,9 +1340,11 @@
   // Unlike lookupLine() — which only looks at the current activeLocale —
   // this reaches into TranslationState[locale] for any locale, so the
   // comparison reflects imported files + inline edits per language.
-  // Same bundle-as-implicit-baseline rule as lookupLine: Compare Mode
-  // already passes the locale's AST text as fallbackText, so non-empty
-  // fallback counts as 'baseline' (locked translation).
+  // Same R2 bundle rule as lookupLine: bundle counts as baseline only
+  // when the locale's text differs from en-US (English-fallback lines
+  // count as untranslated). Compare Mode passes fallbackText sourced
+  // from the locale's AST, but we re-consult the bundle map for the
+  // R2 filter rather than just trusting non-emptiness.
   function lookupForLocale(locale, uid, fallbackText) {
     if (!locale || !uid) return { text: fallbackText, status: 'inactive' };
     if (isSourceLocale(locale)) return { text: fallbackText, status: 'inactive' };
@@ -1357,7 +1362,10 @@
     if (text != null && text !== '') {
       return { text, status: ts.source(uid) };
     }
-    if (fallbackText && fallbackText !== '') {
+    const bundleMap = STATE.hooks && STATE.hooks.getLocaleBundleMap
+      ? STATE.hooks.getLocaleBundleMap(locale)
+      : null;
+    if (bundleMap && bundleMap.has(uid)) {
       return { text: fallbackText, status: 'baseline' };
     }
     return { text: fallbackText, status: 'untranslated' };
