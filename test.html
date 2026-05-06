@@ -79,6 +79,10 @@
 <script src="parser.js"></script>
 <script src="runtime.js"></script>
 <script src="translation-state.js"></script>
+<!-- xlsx.full.min.js + jszip.min.js are needed by the LocWriter xlsx
+     patch path (and to construct fixtures for those tests). -->
+<script src="xlsx.full.min.js"></script>
+<script src="jszip.min.js"></script>
 <script src="loc-parser.js"></script>
 <script src="loc-writer.js"></script>
 <script src="yarn-converter.js"></script>
@@ -748,7 +752,7 @@
       idCol: 3, localeCol: 2, csvHasBom: true,
     };
     const merged = new Map([['uid-1', 'Bonjour'], ['uid-2', 'Au revoir']]);
-    const out = LocWriter.writeLocFile(source, merged, {});
+    const out = await LocWriter.writeLocFile(source, merged, {});
     assertEq(out.filename, 'in_filled.csv');
     const f = new File([out.payload], out.filename);
     const r = await LocParser.parseFile(f, 'fr-FR');
@@ -756,18 +760,18 @@
     assertEq(r.translations.get('uid-2'), 'Au revoir');
   });
 
-  test('untranslated row exports empty cell', () => {
+  test('untranslated row exports empty cell', async () => {
     const source = {
       format: 'csv', fileName: 'in.csv',
       headers: ['Type','en-US','fr-FR','ID'],
       rows: [['Dialogue','Hello','','uid-1']],
       idCol: 3, localeCol: 2, csvHasBom: false,
     };
-    const out = LocWriter.writeLocFile(source, new Map(), {});
+    const out = await LocWriter.writeLocFile(source, new Map(), {});
     assert(out.payload.includes(',,'), 'expected empty translation cell, got: ' + out.payload);
   });
 
-  test('cells with comma are quoted in CSV output', () => {
+  test('cells with comma are quoted in CSV output', async () => {
     const source = {
       format: 'csv', fileName: 'in.csv',
       headers: ['Type','en-US','fr-FR','ID'],
@@ -775,16 +779,16 @@
       idCol: 3, localeCol: 2, csvHasBom: false,
     };
     const merged = new Map([['uid-1', 'Bonjour, ami']]);
-    const out = LocWriter.writeLocFile(source, merged, {});
+    const out = await LocWriter.writeLocFile(source, merged, {});
     assert(out.payload.includes('"Bonjour, ami"'), 'comma cell must be quoted');
   });
 
-  test('writeLocFile rejects malformed source', () => {
-    assertThrows(() => LocWriter.writeLocFile({ rows: [] }, new Map(), {}));
-    assertThrows(() => LocWriter.writeLocFile(null, new Map(), {}));
+  test('writeLocFile rejects malformed source', async () => {
+    await assertThrowsAsync(() => LocWriter.writeLocFile({ rows: [] }, new Map(), {}));
+    await assertThrowsAsync(() => LocWriter.writeLocFile(null, new Map(), {}));
   });
 
-  test('writeLocFile auto-appends ReviewStatus column when statuses given', () => {
+  test('writeLocFile auto-appends ReviewStatus column when statuses given', async () => {
     const source = {
       format: 'csv', fileName: 'in.csv',
       headers: ['Type', 'en-US', 'fr-FR', 'ID'],
@@ -793,14 +797,14 @@
     };
     const merged = new Map([['uid-1', 'Salut']]);
     const statuses = new Map([['uid-1', 'approved']]);
-    const out = LocWriter.writeLocFile(source, merged, { statuses });
+    const out = await LocWriter.writeLocFile(source, merged, { statuses });
     assert(out.payload.includes('ReviewStatus'),
       'expected ReviewStatus in header, got: ' + out.payload);
     assert(out.payload.includes('approved'),
       'expected approved value, got: ' + out.payload);
   });
 
-  test('writeLocFile reuses existing ReviewStatus column (no duplicate)', () => {
+  test('writeLocFile reuses existing ReviewStatus column (no duplicate)', async () => {
     const source = {
       format: 'csv', fileName: 'in.csv',
       headers: ['Type', 'en-US', 'fr-FR', 'ID', 'ReviewStatus'],
@@ -809,7 +813,7 @@
     };
     const merged = new Map([['uid-1', 'Salut']]);
     const statuses = new Map([['uid-1', 'needs-review']]);
-    const out = LocWriter.writeLocFile(source, merged, { statuses });
+    const out = await LocWriter.writeLocFile(source, merged, { statuses });
     // Should not be a duplicate header column.
     const headerLine = out.payload.split('\r\n')[0];
     const matches = headerLine.split(',').filter(h => h.toLowerCase() === 'reviewstatus');
@@ -818,7 +822,7 @@
       'expected needs-review value, got: ' + out.payload);
   });
 
-  test('writeLocFile clears empty status (no stale residue) for uids removed from statuses', () => {
+  test('writeLocFile clears empty status (no stale residue) for uids removed from statuses', async () => {
     const source = {
       format: 'csv', fileName: 'in.csv',
       headers: ['Type', 'en-US', 'fr-FR', 'ID', 'ReviewStatus'],
@@ -831,7 +835,7 @@
     const merged = new Map();
     // Only uid-1 still has a status; uid-2's stale "needs-review" should be wiped.
     const statuses = new Map([['uid-1', 'approved']]);
-    const out = LocWriter.writeLocFile(source, merged, { statuses });
+    const out = await LocWriter.writeLocFile(source, merged, { statuses });
     const lines = out.payload.split('\r\n').filter(l => l);
     // Find the uid-2 row
     const uid2Row = lines.find(l => l.includes('uid-2'));
@@ -852,7 +856,7 @@
     };
     const merged = new Map([['uid-1', 'Bonjour'], ['uid-2', 'Adieu'], ['uid-3', 'Oui']]);
     const statuses = new Map([['uid-1', 'approved'], ['uid-2', 'needs-review']]);
-    const out = LocWriter.writeLocFile(source, merged, { statuses });
+    const out = await LocWriter.writeLocFile(source, merged, { statuses });
     const f = new File([out.payload], out.filename);
     const r = await LocParser.parseFile(f, 'fr-FR');
     assertEq(r.translations.get('uid-1'), 'Bonjour');
@@ -860,6 +864,208 @@
     assertEq(r.statuses.get('uid-1'), 'approved');
     assertEq(r.statuses.get('uid-2'), 'needs-review');
     assertEq(r.statuses.has('uid-3'), false);   // no status was set
+  });
+
+  // ============================================================
+  //  loc-writer.js — xlsx surgical-patch path
+  // ============================================================
+  setGroup('loc-writer.js — xlsx surgical-patch');
+
+  // Build an in-memory xlsx fixture using SheetJS, return ArrayBuffer.
+  // SheetJS community doesn't write cell styles (per their docs), so the
+  // generated file's styles.xml is minimal — we use it only to verify
+  // value-level patching + zip-entry preservation, not visual styles.
+  function buildFixtureXlsx(headers, rows, sheetName) {
+    const aoa = [headers].concat(rows);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Translations');
+    return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  }
+
+  // Round-trip: patch a cell, verify value via parseXlsx.
+  test('xlsx patch updates target cell value', async () => {
+    const buf = buildFixtureXlsx(
+      ['Type', 'en-US', 'fr-FR', 'ID'],
+      [
+        ['Dialogue', 'Hello', '', 'uid-1'],
+        ['Dialogue', 'Goodbye', '', 'uid-2'],
+      ],
+      'MySheet'
+    );
+    const source = {
+      format: 'xlsx', fileName: 'in.xlsx',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID'],
+      rows: [
+        ['Dialogue', 'Hello', '', 'uid-1'],
+        ['Dialogue', 'Goodbye', '', 'uid-2'],
+      ],
+      idCol: 3, localeCol: 2, csvHasBom: false,
+      originalArrayBuffer: buf,
+    };
+    const merged = new Map([['uid-1', 'Bonjour'], ['uid-2', 'Au revoir']]);
+    const out = await LocWriter.writeLocFile(source, merged, {});
+    assertEq(out.mime, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    // Read the patched xlsx back via parseXlsx → verify values.
+    const fileBuf = await out.payload.arrayBuffer();
+    const f = new File([fileBuf], out.filename);
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.translations.get('uid-1'), 'Bonjour');
+    assertEq(r.translations.get('uid-2'), 'Au revoir');
+  });
+
+  // Patch path must preserve sheet name (rebuild path overwrites with
+  // 'Translations' — proves we're going through the surgical patch).
+  test('xlsx patch preserves original sheet name', async () => {
+    const buf = buildFixtureXlsx(
+      ['Type', 'en-US', 'fr-FR', 'ID'],
+      [['Dialogue', 'Hi', '', 'uid-1']],
+      '譯者工作表'
+    );
+    const source = {
+      format: 'xlsx', fileName: 'in.xlsx',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID'],
+      rows: [['Dialogue', 'Hi', '', 'uid-1']],
+      idCol: 3, localeCol: 2,
+      originalArrayBuffer: buf,
+    };
+    const merged = new Map([['uid-1', 'Salut']]);
+    const out = await LocWriter.writeLocFile(source, merged, {});
+    const fileBuf = await out.payload.arrayBuffer();
+    const wb = XLSX.read(fileBuf, { type: 'array' });
+    assertEq(wb.SheetNames[0], '譯者工作表');
+  });
+
+  // Patch path must preserve untouched zip entries byte-equal — the
+  // styles.xml / theme / sharedStrings / workbook.xml files we never
+  // open should hash identical pre vs post.
+  test('xlsx patch leaves untouched zip entries byte-equal', async () => {
+    const buf = buildFixtureXlsx(
+      ['Type', 'en-US', 'fr-FR', 'ID'],
+      [['Dialogue', 'Hi', '', 'uid-1']],
+      'Sheet1'
+    );
+    // Snapshot every entry's bytes from the input.
+    const inZip = await JSZip.loadAsync(buf);
+    const inEntries = {};
+    for (const name of Object.keys(inZip.files)) {
+      if (inZip.files[name].dir) continue;
+      inEntries[name] = await inZip.file(name).async('uint8array');
+    }
+
+    const source = {
+      format: 'xlsx', fileName: 'in.xlsx',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID'],
+      rows: [['Dialogue', 'Hi', '', 'uid-1']],
+      idCol: 3, localeCol: 2,
+      originalArrayBuffer: buf,
+    };
+    const merged = new Map([['uid-1', 'Salut']]);
+    const out = await LocWriter.writeLocFile(source, merged, {});
+    const fileBuf = await out.payload.arrayBuffer();
+    const outZip = await JSZip.loadAsync(fileBuf);
+
+    // Every entry except the touched worksheet xml must be byte-equal.
+    const touchedHints = ['xl/worksheets/sheet1.xml']; // worksheet we patch
+    for (const name of Object.keys(inEntries)) {
+      if (touchedHints.some(h => name.toLowerCase() === h)) continue;
+      const after = await outZip.file(name).async('uint8array');
+      const before = inEntries[name];
+      if (after.length !== before.length) {
+        throw new Error(`zip entry "${name}" length changed: ${before.length} → ${after.length}`);
+      }
+      for (let i = 0; i < before.length; i++) {
+        if (before[i] !== after[i]) {
+          throw new Error(`zip entry "${name}" diverges at byte ${i}`);
+        }
+      }
+    }
+  });
+
+  // Adding ReviewStatus column to xlsx that lacks it: verify column
+  // exists in re-read output + dimension covers the new range.
+  test('xlsx patch appends ReviewStatus column when source lacks it', async () => {
+    const buf = buildFixtureXlsx(
+      ['Type', 'en-US', 'fr-FR', 'ID'],
+      [['Dialogue', 'Hi', '', 'uid-1']],
+      'Sheet1'
+    );
+    const source = {
+      format: 'xlsx', fileName: 'in.xlsx',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID'],
+      rows: [['Dialogue', 'Hi', '', 'uid-1']],
+      idCol: 3, localeCol: 2, csvHasBom: false,
+      originalArrayBuffer: buf,
+      // Caller (translation-ui's augmentSourceForExport) records the
+      // pre-augment header count so the patcher knows what's "new".
+      originalHeaderCount: 4,
+    };
+    const merged = new Map([['uid-1', 'Salut']]);
+    const statuses = new Map([['uid-1', 'approved']]);
+    const out = await LocWriter.writeLocFile(source, merged, { statuses });
+    const fileBuf = await out.payload.arrayBuffer();
+    const f = new File([fileBuf], out.filename);
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.translations.get('uid-1'), 'Salut');
+    assertEq(r.statuses.get('uid-1'), 'approved');
+    assertEq(r.stats.hasStatusColumn, true);
+  });
+
+  // Merged cells overlapping a target column must trigger fallback to
+  // the rebuild path (which throws away styles but produces a valid
+  // file). Worst-case behavior, no corruption.
+  test('xlsx patch falls back to rebuild when merged cell overlaps localeCol', async () => {
+    // Build a fixture with a merge across cols B-C (en-US + fr-FR cols).
+    const buf = buildFixtureXlsx(
+      ['Type', 'en-US', 'fr-FR', 'ID'],
+      [['Dialogue', 'Hi', '', 'uid-1']],
+      'Sheet1'
+    );
+    // Inject a <mergeCells> block into sheet1.xml to simulate a
+    // translator-built file with a header merge.
+    const zipIn = await JSZip.loadAsync(buf);
+    let xml = await zipIn.file('xl/worksheets/sheet1.xml').async('string');
+    // Insert merge AFTER </sheetData> (where the spec puts it).
+    xml = xml.replace('</sheetData>',
+      '</sheetData><mergeCells count="1"><mergeCell ref="B1:C1"/></mergeCells>');
+    zipIn.file('xl/worksheets/sheet1.xml', xml);
+    const buf2 = await zipIn.generateAsync({ type: 'arraybuffer' });
+
+    const source = {
+      format: 'xlsx', fileName: 'in.xlsx',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID'],
+      rows: [['Dialogue', 'Hi', '', 'uid-1']],
+      idCol: 3, localeCol: 2,
+      originalArrayBuffer: buf2,
+    };
+    const merged = new Map([['uid-1', 'Salut']]);
+    // Should NOT throw — fallback kicks in and writes via SheetJS rebuild.
+    const out = await LocWriter.writeLocFile(source, merged, {});
+    const fileBuf = await out.payload.arrayBuffer();
+    const f = new File([fileBuf], out.filename);
+    const r = await LocParser.parseFile(f, 'fr-FR');
+    assertEq(r.translations.get('uid-1'), 'Salut');
+    // Rebuild path uses sheet name 'Translations' — proves fallback ran.
+    const wb = XLSX.read(fileBuf, { type: 'array' });
+    assertEq(wb.SheetNames[0], 'Translations');
+  });
+
+  // Synthetic / no-original-buffer xlsx export must use rebuild path
+  // (current behavior unchanged — fallback when no buffer to patch).
+  test('xlsx without originalArrayBuffer falls through to rebuild', async () => {
+    const source = {
+      format: 'xlsx', fileName: 'synthetic.xlsx',
+      headers: ['Type', 'en-US', 'fr-FR', 'ID'],
+      rows: [['Dialogue', 'Hi', '', 'uid-1']],
+      idCol: 3, localeCol: 2,
+      // intentionally no originalArrayBuffer
+    };
+    const merged = new Map([['uid-1', 'Salut']]);
+    const out = await LocWriter.writeLocFile(source, merged, {});
+    const fileBuf = await out.payload.arrayBuffer();
+    const wb = XLSX.read(fileBuf, { type: 'array' });
+    // SheetJS rebuild names the sheet 'Translations'.
+    assertEq(wb.SheetNames[0], 'Translations');
   });
 
   // ============================================================

@@ -88,6 +88,9 @@
 
   /**
   * 解析 .xlsx ArrayBuffer。需要全域 XLSX 物件（SheetJS）。
+  * 額外把 originalArrayBuffer 留在 source 內,供 LocWriter 的 surgical-patch
+  * 路徑用 — 重新匯出時保留譯者的顏色 / 字型 / column widths / sheet name /
+  * 公式 / merge cells / cell comments / data validation 等所有原樣式。
   */
   function parseXlsx(arrayBuffer, expectedLocale, opts) {
     opts = opts || {};
@@ -108,7 +111,13 @@
     if (rows.length === 0) throw new Error('xlsx 第一張工作表是空的');
     // sheet_to_json 已經回 string[][]，但 cells 可能是 number/boolean，統一成 string
     const normalized = rows.map(r => r.map(c => c == null ? '' : String(c)));
-    return rowsToTranslations(normalized, expectedLocale, Object.assign({}, opts, { format: 'xlsx', csvHasBom: false }));
+    const result = rowsToTranslations(normalized, expectedLocale,
+      Object.assign({}, opts, { format: 'xlsx', csvHasBom: false }));
+    // Stash the raw bytes for the surgical-patch export path.
+    if (result.source) {
+      result.source.originalArrayBuffer = arrayBuffer;
+    }
+    return result;
   }
 
   /**

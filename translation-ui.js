@@ -1045,7 +1045,7 @@
         }
       }
       const statuses = ts ? ts.getStatusMap() : new Map();
-      const result = LocWriter.writeLocFile(source, merged, { statuses });
+      const result = await LocWriter.writeLocFile(source, merged, { statuses });
       const blob = result.payload instanceof Blob
         ? result.payload
         : new Blob([result.payload], { type: result.mime });
@@ -1162,6 +1162,11 @@
       localeCol: source.localeCol,
       statusCol: typeof source.statusCol === 'number' ? source.statusCol : -1,
       csvHasBom: source.csvHasBom,
+      // Pass through to LocWriter's surgical-patch path. originalHeaderCount
+      // is captured BEFORE we mutate headers below so the patcher knows
+      // exactly which columns are "new" vs "existing in user's xlsx".
+      originalArrayBuffer: source.originalArrayBuffer,
+      originalHeaderCount: source.headers.length,
     };
 
     const headerIdx = (name) => {
