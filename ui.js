@@ -2264,11 +2264,18 @@
         // bundler keep the English text as fallback for missing lines —
         // counting those English-fallback lines as "translated" lies about
         // progress (locale would show 100% even when nothing's done).
-        // Edge case: translator legitimately keeps a line same as English
-        // (proper noun / "OK" / single number) → flagged as untranslated.
-        // User can override via the chip menu's "approved" mark.
+        // Exception: lines with NO letter characters (numbers / symbols /
+        // punctuation / emoji like "...", "5", "100%", "?", "—") don't
+        // *need* translation across locales, so the translator legitimately
+        // keeps them identical to source. Skip R2 for those — non-empty is
+        // good enough. \p{L} catches every script's letter category (Latin,
+        // CJK, Cyrillic, Arabic, etc), so the rule remains "is there any
+        // word-shaped content here that should differ between languages".
+        // Remaining false-negative: proper noun lines like "OK" / "Microsoft"
+        // / "Mira" where the translator keeps it. User can mark "approved"
+        // via the chip menu to override.
         const enText = (e.text || '').toString();
-        if (txt === enText) continue;
+        if (txt === enText && /\p{L}/u.test(enText)) continue;
         const uid = TranslationUI.getUidFor(enEntry.filename, enNode.nodeIndex, e.srcLine);
         if (uid) out.set(uid, txt);
       }
