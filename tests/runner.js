@@ -698,6 +698,52 @@ async function runIntegrationSuite(page) {
       }
     });
 
+    await run('locale with no bundled JSON falls back to en-US project gracefully', async () => {
+      // fr-FR's bundle JSONs were deleted from data/ — the locale stays
+      // selectable, ensureLoaded swaps in en-US's project, runtime + UI
+      // still work, R2 bundle filter sees text === en-US for every line
+      // → progress reads 0% (correct: nothing translated yet).
+      const hasFR = await page.evaluate(() => {
+        const sel = document.getElementById('locale-select');
+        return Array.from(sel.options).some(o => o.value === 'fr-FR');
+      });
+      if (!hasFR) return;   // manifest not bundled in test fixture
+      await page.evaluate(() => {
+        const sel = document.getElementById('locale-select');
+        sel.value = 'fr-FR';
+        sel.dispatchEvent(new Event('change'));
+      });
+      await page.waitForFunction(
+        () => document.querySelectorAll('#node-list li').length > 0,
+        { timeout: 5000 }
+      );
+      await page.waitForTimeout(400);
+      // No crash, sidebar populated. Now check progress reads 0% for at
+      // least one node (R2 should mark every line untranslated since
+      // fr-FR's project IS en-US's project → text equals → bundle empty).
+      const result = await page.evaluate(() => {
+        const lis = Array.from(document.querySelectorAll('#node-list li'));
+        let zeroCount = 0;
+        let nonZeroCount = 0;
+        for (const li of lis) {
+          const prog = li.querySelector('.node-progress-text');
+          if (!prog) continue;
+          const m = /^(\d+)\/(\d+)$/.exec(prog.textContent);
+          if (!m) continue;
+          if (m[1] === '0' && m[2] !== '0') zeroCount++;
+          else nonZeroCount++;
+        }
+        return { zeroCount, nonZeroCount, totalNodes: lis.length };
+      });
+      if (result.totalNodes === 0) throw new Error('sidebar empty after fr-FR switch');
+      if (result.zeroCount === 0) {
+        throw new Error(
+          `expected at least one node with 0/N translated (fr-FR not bundled), got ` +
+          `zero=${result.zeroCount} nonzero=${result.nonZeroCount}`
+        );
+      }
+    });
+
     await run('source locale lookupLine returns inactive even with bundle text', async () => {
       await page.evaluate(() => {
         const sel = document.getElementById('locale-select');

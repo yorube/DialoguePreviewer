@@ -815,10 +815,44 @@
     if (entry.project) return entry.project;
     if (!entry.fetchUrl) throw new Error(`No source for ${group}/${locale}`);
 
+    // Non-source locales whose JSON 404s (e.g. fr-FR mid-translation
+    // where the project hasn't bundled a fr-FR build yet) fall back to
+    // sharing en-US's parsed project — the runtime needs SOME project
+    // to drive playback, en-US is the canonical structure, and the
+    // display layer's lookupLine still overrides text from the user's
+    // imported CSV / inline edits per locale. The R2 bundle filter
+    // naturally reads "every line equals en-US → 0% translated", which
+    // is the correct visual signal for "this locale needs work".
+    // Guard against infinite recursion if en-US itself is missing.
+    const tryFallback = async (reason) => {
+      if (locale === 'en-US' || !localesMap.has('en-US')) return null;
+      console.warn(`[ensureLoaded] ${group}/${locale} ${reason} — falling back to en-US`);
+      const enProject = await ensureLoaded(group, 'en-US');
+      entry.project = enProject;
+      entry.isFallbackToEnUS = true;
+      return enProject;
+    };
+
     setStatus(t('status.loading', { file: entry.filename }));
     const t0 = performance.now();
-    const r = await fetch(entry.fetchUrl, { cache: 'no-cache' });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    let r;
+    try {
+      r = await fetch(entry.fetchUrl, { cache: 'no-cache' });
+    } catch (netErr) {
+      const fallback = await tryFallback(`fetch errored (${netErr.message})`);
+      if (fallback) { setStatus(''); return fallback; }
+      throw netErr;
+    }
+    if (!r.ok) {
+      // 404 / 403 / 500 → only fall back for missing-file (404). Other
+      // statuses indicate server config issues that should surface as
+      // errors so the user knows.
+      if (r.status === 404) {
+        const fallback = await tryFallback(`HTTP 404`);
+        if (fallback) { setStatus(''); return fallback; }
+      }
+      throw new Error(`HTTP ${r.status}`);
+    }
     const json = await r.json();
     if (!Array.isArray(json)) throw new Error(t('error.invalidJson'));
 
