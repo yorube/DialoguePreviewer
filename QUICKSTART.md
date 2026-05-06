@@ -28,7 +28,7 @@
 | `R` | Replay current node |
 | `←` / `Backspace` | Step back |
 | `Ctrl/Cmd + Enter` | Save inline edit |
-| `Esc` | Cancel edit, or exit Compare Mode |
+| `Esc` | Cancel edit |
 
 Shortcuts pause while typing in any input or textarea.
 

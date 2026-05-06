@@ -67,25 +67,7 @@
       'btn.stepBack': '← Step back',
       'btn.continue': '▼ Continue (Space)',
       'btn.openNote': '📝 Note',
-      'btn.compareLangs': '📊 Compare languages',
-      'btn.compareLangs.tip': 'Swap the dialogue panel for a side-by-side translation table of the active node. Click any non-source cell to edit. Press Esc to exit.',
       'btn.resetOverrides': '🔄 Reset overrides ({n})',
-      'compare.tip': 'Each row is one translatable line / option in the current node. Cells show the displayed text per language (imported file + inline edits applied).',
-      'compare.col.line': 'Line',
-      'compare.col.kind': 'Kind',
-      'compare.col.speaker': 'Speaker',
-      'compare.kind.line': 'Dialogue',
-      'compare.kind.option': '→ Option',
-      'compare.empty': '— (no text)',
-      'compare.missing': '— missing —',
-      'compare.loading': 'Loading translations across {n} languages…',
-      'compare.noNode': 'Pick a node to compare.',
-      'compare.loadFailed': 'Failed to load {locale}: {msg}',
-      'compare.legend.source': 'Source',
-      'compare.legend.translated': 'Translated',
-      'compare.legend.untranslated': 'Untranslated (falls back to source)',
-      'compare.legend.override': 'Inline edit',
-      'compare.editHint': '✏️ Click any non-source cell to edit (Ctrl+Enter saves, Esc cancels). Use 💾 Export above to save to .csv / .xlsx.',
       'sidebar.nodes': 'Nodes',
       'sidebar.uidSearch': 'UID Search',
       'sidebar.uidSearch.placeholder': 'Paste UID…',
@@ -226,10 +208,6 @@
       'tr.progress.breakdown.approved':        'approved {n}',
       'tr.progress.breakdown.cleanBaseline':   'imported {n}',
       'tr.progress.breakdown.filterTip':       'Filter the sidebar to nodes containing this status',
-      'compare.cell.tip.source':               'Source language (not editable)',
-      'compare.cell.tip.translated':           'Translated (from imported file)',
-      'compare.cell.tip.untranslated':         'Untranslated — falls back to the source text',
-      'compare.cell.tip.override':             'Inline-edited in browser',
       // ----- UI Strings page -----
       'ui.brand': 'UI Strings',
       'ui.import': '📥 Import .xlsx',
@@ -326,25 +304,7 @@
       'btn.stepBack': '← 退一行',
       'btn.continue': '▼ 繼續 (Space)',
       'btn.openNote': '📝 筆記',
-      'btn.compareLangs': '📊 對照各語言',
-      'btn.compareLangs.tip': '把對話區換成多語言對照表（當前節點），可以直接點任一非原文格修改譯文。Esc 退出。',
       'btn.resetOverrides': '🔄 重置覆寫 ({n})',
-      'compare.tip': '每一列是當前節點裡一條可翻譯的對話/選項。每格顯示該語言實際會被看到的文字（已套用匯入檔 + 站內編輯）。',
-      'compare.col.line': '行號',
-      'compare.col.kind': '類型',
-      'compare.col.speaker': '說話者',
-      'compare.kind.line': '對話',
-      'compare.kind.option': '→ 選項',
-      'compare.empty': '— (空白) —',
-      'compare.missing': '— 缺 —',
-      'compare.loading': '載入 {n} 種語言中…',
-      'compare.noNode': '請先選一個節點。',
-      'compare.loadFailed': '載入 {locale} 失敗：{msg}',
-      'compare.legend.source': '原文',
-      'compare.legend.translated': '已翻譯',
-      'compare.legend.untranslated': '未翻譯（回退原文）',
-      'compare.legend.override': '站內編輯',
-      'compare.editHint': '✏️ 點任一非原文欄位即可編輯（Ctrl+Enter 儲存、Esc 取消）。要存檔請用上方 💾 匯出 .csv / .xlsx。',
       'sidebar.nodes': '節點清單',
       'sidebar.uidSearch': 'UID 搜尋',
       'sidebar.uidSearch.placeholder': '貼上 UID…',
@@ -485,10 +445,6 @@
       'tr.progress.breakdown.approved':        '已核可 {n}',
       'tr.progress.breakdown.cleanBaseline':   '已匯入 {n}',
       'tr.progress.breakdown.filterTip':       '依此狀態篩選 sidebar 節點清單',
-      'compare.cell.tip.source':               '原文(不可編輯)',
-      'compare.cell.tip.translated':           '已翻譯(來自匯入檔)',
-      'compare.cell.tip.untranslated':         '未翻譯 — 顯示原文回退',
-      'compare.cell.tip.override':             '站內編輯',
       // ----- UI Strings 分頁 -----
       'ui.brand': 'UI 字串',
       'ui.import': '📥 匯入 .xlsx',
@@ -658,7 +614,6 @@
     speakerGender: {},              // name → 'M' | 'F' | 'N'
     noteSaveTimer: null,            // debounce timer for note autosave
     noteLoadedFor: null,            // {group, title} the textarea is bound to
-    compareMode: false,             // Compare Mode (full-page side-by-side)
     lastVarValues: {},              // previous var values for change badges
     guidsRev: null,                 // {guid → en-US filename}, lazily loaded
   };
@@ -2220,9 +2175,8 @@
   // ru-RU / ja-JP / zh-CN) don't show as untranslated just because the user
   // never imported a CSV for them.
   //
-  // AST-position alignment (same trick Compare Mode's localeFlatEntries
-  // uses) handles CJK srcLine drift: en-US's srcLine drives the UID,
-  // active locale contributes the text at the same AST index.
+  // AST-position alignment handles CJK srcLine drift: en-US's srcLine drives
+  // the UID, active locale contributes the text at the same AST index.
   //
   // Caching: per-(locale project) WeakMap. The project object identity is
   // stable for an entry's lifetime; replaced on script reload, which
@@ -2410,21 +2364,11 @@
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // §12b Translation Compare Mode (in-panel side-by-side view)
-  // ─────────────────────────────────────────────────────────────────────────
-  // Switching Compare Mode on swaps the dialogue panel from runtime preview
-  // (or flat-edit view) to a comparison table for the active node across
-  // every bundled locale. Source / vars panels and the sidebar stay visible
-  // so the translator can keep referring to the original script while
-  // editing. Cells in non-source columns are click-to-edit (writes back to
-  // that locale's TranslationState). Mutually exclusive with Edit Mode —
-  // turning either on clears the other. CSV/xlsx export uses the existing
-  // 💾 button in the global ops bar.
-
-  // Walk a parsed node's statements depth-first and yield every translatable
-  // entry (Dialogue line / option) in display order, preserving srcLine so we
-  // can match the same entry across locales.
+  // Walk a parsed node DFS, yield every translatable entry (line / option) in
+  // display order keyed by srcLine. Used by collectLocaleBundleMap to align
+  // en-US AST positions with locale AST positions — locale .json bodies
+  // sometimes have extra blank lines that shift srcLine while the AST shape
+  // stays parallel.
   function flattenComparableEntries(node) {
     const out = [];
     if (!node || !node.statements) return out;
@@ -2459,378 +2403,6 @@
     }
     walk(node.statements);
     return out;
-  }
-
-  // Flatten one locale's same-titled node into the same shape as
-  // flattenComparableEntries(en-US) so we can align rows position-by-position
-  // across locales. We can't use srcLine for alignment because some locales
-  // (notably zh-TW / zh-CN / ja-JP) have extra blank lines in the body
-  // string, shifting srcLine even though the AST shape is identical to
-  // en-US's. Returns null when the locale has no matching node at all.
-  function localeFlatEntries(project, nodeTitle) {
-    if (!project || !nodeTitle) return null;
-    const node = project.nodes && project.nodes.get(nodeTitle);
-    if (!node) return null;
-    return flattenComparableEntries(node);
-  }
-
-  function isSourceLocaleForCompare(loc) {
-    return loc === 'en-US' || loc === 'zh-TW' || loc === 'unknown';
-  }
-
-  // Toggle Compare Mode on/off. When turning on, also disable Edit Mode (the
-  // two are mutually exclusive view modes — only one can take over the
-  // dialogue panel at a time). Idempotent: redundant toggles are no-ops.
-  function setCompareMode(on) {
-    on = !!on;
-    if (state.compareMode === on) return;
-    state.compareMode = on;
-    document.body.classList.toggle('t-compare-mode', on);
-    const btn = $('compare-mode-toggle');
-    if (btn) btn.classList.toggle('active', on);
-    if (on && typeof TranslationUI !== 'undefined' && TranslationUI.isActive
-        && TranslationUI.isActive() && TranslationUI.setEditMode) {
-      TranslationUI.setEditMode(false);
-    }
-    if (on) {
-      renderCompareView().catch(err => {
-        console.error('[compare] render failed', err);
-        setStatus(t('status.error', { msg: err.message || String(err), at: 'compare' }));
-      });
-    }
-  }
-
-  function toggleCompareMode() { setCompareMode(!state.compareMode); }
-
-  // Render (or re-render) the comparison view for the active node into
-  // #compare-view. Lazy-loads every locale's project. Safe to call on every
-  // node change — no-op if Compare Mode is off.
-  async function renderCompareView() {
-    if (!state.compareMode) return;
-    const view = $('compare-view');
-    if (!view) return;
-
-    // Compare Mode is independent of playback — follows the active node
-    // whether or not the runtime is currently running.
-    const group = state.activeGroup;
-    const nodeTitle = currentNodeTitle();
-    if (!group || !nodeTitle) {
-      view.innerHTML = `<div class="compare-empty-state">${t('compare.noNode')}</div>`;
-      return;
-    }
-
-    const localesMap = state.groups.get(group);
-    if (!localesMap) return;
-    const allLocales = [...localesMap.keys()];
-    const ordered = [];
-    if (localesMap.has('en-US')) ordered.push('en-US');
-    if (localesMap.has('zh-TW')) ordered.push('zh-TW');
-    for (const loc of allLocales.sort()) {
-      if (!ordered.includes(loc)) ordered.push(loc);
-    }
-
-    view.innerHTML = `<div class="compare-empty-state">${t('compare.loading', { n: ordered.length })}</div>`;
-
-    const loadResults = await Promise.all(ordered.map(async (loc) => {
-      try {
-        const project = await ensureLoaded(group, loc);
-        return { locale: loc, project, error: null };
-      } catch (e) {
-        console.error('[compare] load failed', loc, e);
-        return { locale: loc, project: null, error: e.message || String(e) };
-      }
-    }));
-
-    // Bail out if user exited Compare Mode while we were loading.
-    if (!state.compareMode) return;
-    renderCompareTable(view, group, nodeTitle, loadResults);
-  }
-
-  function renderCompareTable(container, group, nodeTitle, loadResults) {
-    container.innerHTML = '';
-
-    // ── Header bar (node title + tip + legend) ─────────────────────────────
-    const head = document.createElement('div');
-    head.className = 'compare-head';
-
-    const titleRow = document.createElement('div');
-    titleRow.className = 'compare-titlebar';
-    const titleLabel = document.createElement('span');
-    titleLabel.className = 'compare-node-label';
-    titleLabel.textContent = nodeTitle;
-    titleRow.appendChild(titleLabel);
-    const tip = document.createElement('span');
-    tip.className = 'compare-tip';
-    tip.textContent = t('compare.tip');
-    titleRow.appendChild(tip);
-    head.appendChild(titleRow);
-
-    const legend = document.createElement('div');
-    legend.className = 'compare-legend';
-    legend.innerHTML =
-      `<span class="compare-chip compare-chip-source">${t('compare.legend.source')}</span>` +
-      `<span class="compare-chip compare-chip-translated">${t('compare.legend.translated')}</span>` +
-      `<span class="compare-chip compare-chip-override">${t('compare.legend.override')}</span>` +
-      `<span class="compare-chip compare-chip-untranslated">${t('compare.legend.untranslated')}</span>` +
-      `<span class="compare-edit-hint">${t('compare.editHint')}</span>`;
-    head.appendChild(legend);
-    container.appendChild(head);
-
-    // Source = en-US; if missing fall back to first loaded locale.
-    let sourceRes = loadResults.find(r => r.locale === 'en-US' && r.project);
-    if (!sourceRes) sourceRes = loadResults.find(r => r.project);
-    if (!sourceRes) {
-      const empty = document.createElement('div');
-      empty.className = 'compare-empty-state';
-      empty.textContent = t('compare.missing');
-      container.appendChild(empty);
-      return;
-    }
-
-    const sourceNode = sourceRes.project.nodes.get(nodeTitle);
-    if (!sourceNode) {
-      const empty = document.createElement('div');
-      empty.className = 'compare-empty-state';
-      empty.textContent = t('error.nodeNotFound', { title: nodeTitle });
-      container.appendChild(empty);
-      return;
-    }
-    const entries = flattenComparableEntries(sourceNode);
-    if (!entries.length) {
-      const empty = document.createElement('div');
-      empty.className = 'compare-empty-state';
-      empty.textContent = t('compare.empty');
-      container.appendChild(empty);
-      return;
-    }
-
-    // Position-aligned flatten of every locale's same-titled node. Index N in
-    // each array corresponds to the Nth translatable entry — same line across
-    // all languages. Cannot align by srcLine because body line counts drift
-    // between locales (CJK locales pad extra blank lines).
-    const localeEntries = new Map();
-    for (const r of loadResults) {
-      localeEntries.set(r.locale, localeFlatEntries(r.project, nodeTitle));
-    }
-
-    // Resolve nodeIndex once for UID computation (en-US is the canonical UID
-    // source — same convention as decorateLine / computeLineUid).
-    const enEntry = state.groups.get(group).get('en-US');
-    const enFilename = enEntry ? enEntry.filename : null;
-    const sourceNodeIndex = sourceNode.nodeIndex;
-
-    const tableWrap = document.createElement('div');
-    tableWrap.className = 'compare-table-wrap';
-    const table = document.createElement('table');
-    table.className = 'compare-table';
-
-    // ── Header row ─────────────────────────────────────────────────────────
-    const thead = document.createElement('thead');
-    const trh = document.createElement('tr');
-    const addTh = (label, cls) => {
-      const th = document.createElement('th');
-      if (cls) th.className = cls;
-      th.textContent = label;
-      trh.appendChild(th);
-    };
-    addTh('#', 'compare-col-line');
-    addTh(t('compare.col.kind'), 'compare-col-kind');
-    addTh(t('compare.col.speaker'), 'compare-col-speaker');
-    for (const r of loadResults) {
-      const th = document.createElement('th');
-      th.className = 'compare-col-locale';
-      if (isSourceLocaleForCompare(r.locale)) th.classList.add('compare-col-source');
-      if (r.locale === state.activeLocale) th.classList.add('compare-col-active');
-      th.textContent = r.locale;
-      if (r.error) {
-        th.title = t('compare.loadFailed', { locale: r.locale, msg: r.error });
-        th.classList.add('compare-col-error');
-      }
-      trh.appendChild(th);
-    }
-    thead.appendChild(trh);
-    table.appendChild(thead);
-
-    // ── Body ───────────────────────────────────────────────────────────────
-    const tbody = document.createElement('tbody');
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i];
-      const tr = document.createElement('tr');
-      tr.className = 'compare-row compare-row-' + entry.kind;
-
-      const lineCell = document.createElement('td');
-      lineCell.className = 'compare-cell-line';
-      lineCell.textContent = entry.srcLine != null ? String(entry.srcLine) : '';
-      tr.appendChild(lineCell);
-
-      const kindCell = document.createElement('td');
-      kindCell.className = 'compare-cell-kind';
-      kindCell.textContent = entry.kind === 'option'
-        ? t('compare.kind.option')
-        : t('compare.kind.line');
-      tr.appendChild(kindCell);
-
-      const speakerCell = document.createElement('td');
-      speakerCell.className = 'compare-cell-speaker';
-      if (entry.speaker) {
-        renderSpeakerInto(speakerCell, entry.speaker);
-      }
-      tr.appendChild(speakerCell);
-
-      const uid = (enFilename != null && sourceNodeIndex != null && entry.srcLine != null
-        && typeof TranslationUI !== 'undefined' && TranslationUI.getUidFor)
-        ? TranslationUI.getUidFor(enFilename, sourceNodeIndex, entry.srcLine)
-        : null;
-
-      for (const r of loadResults) {
-        const td = document.createElement('td');
-        td.className = 'compare-cell-text';
-        const isSource = isSourceLocaleForCompare(r.locale);
-        if (isSource) td.classList.add('compare-cell-source');
-        if (r.locale === state.activeLocale) td.classList.add('compare-cell-active');
-
-        if (r.error) {
-          td.classList.add('compare-cell-error');
-          td.textContent = '!';
-          td.title = r.error;
-          tr.appendChild(td);
-          continue;
-        }
-
-        // Align by AST position (i), not srcLine, because some locales
-        // (zh-TW / zh-CN / ja-JP) have body strings with extra blank lines
-        // that shift srcLine even though the dialogue tree itself is parallel.
-        const localeArr = localeEntries.get(r.locale);
-        const localeEntry = localeArr ? localeArr[i] : null;
-        const fallbackText = localeEntry ? localeEntry.text : '';
-
-        let displayedText = fallbackText;
-        let status = 'inactive';
-        if (!isSource && uid
-            && typeof TranslationUI !== 'undefined' && TranslationUI.lookupForLocale) {
-          const info = TranslationUI.lookupForLocale(r.locale, uid, fallbackText);
-          displayedText = info.text;
-          status = info.status;
-        }
-
-        if (status === 'override') td.classList.add('compare-cell-override');
-        else if (status === 'baseline') td.classList.add('compare-cell-translated');
-        else if (status === 'untranslated' && !isSource) {
-          td.classList.add('compare-cell-untranslated');
-        }
-
-        // Tooltip explaining the visual state. Source cells use a fixed
-        // tip; non-source cells get one of 3 tips matching the class above.
-        if (isSource) {
-          td.title = t('compare.cell.tip.source');
-        } else if (status === 'override') {
-          td.title = t('compare.cell.tip.override');
-        } else if (status === 'baseline') {
-          td.title = t('compare.cell.tip.translated');
-        } else if (status === 'untranslated') {
-          td.title = t('compare.cell.tip.untranslated');
-        }
-
-        // Non-source cells with a UID are click-to-edit. Edits write to the
-        // per-locale TranslationState via TranslationUI.setOverrideForLocale.
-        if (!isSource && uid && typeof TranslationUI !== 'undefined' && TranslationUI.setOverrideForLocale) {
-          td.classList.add('compare-cell-editable');
-          td.dataset.uid = uid;
-          td.dataset.locale = r.locale;
-          td.dataset.fallback = fallbackText || '';
-          td.addEventListener('click', (ev) => {
-            if (ev.target.closest('.compare-cell-editor')) return;
-            openCompareCellEditor(td);
-          });
-        }
-
-        if (!localeArr && !isSource) {
-          td.classList.add('compare-cell-untranslated');
-          td.textContent = t('compare.missing');
-        } else if (!displayedText) {
-          td.classList.add('compare-cell-empty');
-          td.textContent = t('compare.empty');
-        } else {
-          td.innerHTML = YarnParser.markupToSafeHtml(displayedText);
-        }
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    }
-    table.appendChild(tbody);
-    tableWrap.appendChild(table);
-    container.appendChild(tableWrap);
-  }
-
-  // Inline cell editor: replaces a cell's content with a textarea pre-filled
-  // with the current displayed text. Ctrl/Cmd+Enter saves, Esc cancels.
-  // Saving writes to TranslationState[locale] (override) and re-renders the
-  // table so other panels (active language column, status etc.) stay in sync.
-  function openCompareCellEditor(td) {
-    if (td.querySelector('.compare-cell-editor')) return;
-    const uid = td.dataset.uid;
-    const locale = td.dataset.locale;
-    const fallback = td.dataset.fallback || '';
-    if (!uid || !locale) return;
-
-    const currentText = td.classList.contains('compare-cell-empty') ||
-      td.classList.contains('compare-cell-untranslated') ||
-      td.classList.contains('compare-cell-missing')
-      ? ''
-      : (td.textContent || '').trim();
-
-    const prevHtml = td.innerHTML;
-
-    const editor = document.createElement('div');
-    editor.className = 'compare-cell-editor';
-    const ta = document.createElement('textarea');
-    ta.value = currentText || fallback || '';
-    ta.rows = Math.min(8, Math.max(2, ta.value.split('\n').length + 1));
-    const actions = document.createElement('div');
-    actions.className = 'actions';
-    const ok = document.createElement('button');
-    ok.type = 'button';
-    ok.className = 'confirm';
-    ok.textContent = '✓';
-    const cancel = document.createElement('button');
-    cancel.type = 'button';
-    cancel.className = 'cancel';
-    cancel.textContent = '✗';
-    actions.appendChild(ok);
-    actions.appendChild(cancel);
-    editor.appendChild(ta);
-    editor.appendChild(actions);
-
-    td.innerHTML = '';
-    td.appendChild(editor);
-    ta.focus();
-    ta.select();
-
-    const close = () => { td.innerHTML = prevHtml; };
-    cancel.addEventListener('click', (ev) => { ev.stopPropagation(); close(); });
-    ok.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      const newText = ta.value;
-      try {
-        TranslationUI.setOverrideForLocale(locale, uid, newText);
-      } catch (e) {
-        console.error('[compare] save override failed', e);
-        alert(e.message || String(e));
-        close();
-        return;
-      }
-      // Re-render so all references to this UID across locales (e.g. multiple
-      // rows with shared UIDs in pathological cases) refresh consistently.
-      renderCompareView();
-    });
-    ta.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape') { ev.preventDefault(); close(); }
-      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); ok.click(); }
-    });
-    // Stop bubbling so a click inside the textarea doesn't re-fire the
-    // cell-level click handler that opens the editor.
-    editor.addEventListener('click', (ev) => ev.stopPropagation());
-    editor.addEventListener('mousedown', (ev) => ev.stopPropagation());
   }
 
   // Render the action area (continue / choice buttons) inline at the end of
@@ -3036,8 +2608,8 @@
     renderVars();              // declared defaults + user overrides
     refreshPlaybackUi();       // toggle play vs step-back/replay enable
     renderEmptyState();        // "press ▶ to start" placeholder
-    // Edit Mode and Compare Mode follow the active node directly — they
-    // never needed the runtime, so they refresh on navigation now.
+    // Edit Mode follows the active node directly — it never needed the
+    // runtime, so refresh on navigation.
     refreshAuxModes();
   }
 
@@ -3086,9 +2658,6 @@
   function refreshAuxModes() {
     if (typeof TranslationUI !== 'undefined' && TranslationUI.isActive && TranslationUI.isActive()) {
       redrawTranslationsInPlace();
-    }
-    if (state.compareMode) {
-      renderCompareView().catch(err => console.error('[compare]', err));
     }
   }
 
@@ -3180,18 +2749,6 @@
     });
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !helpOverlay.hidden) closeHelp();
-    });
-
-    // Compare Mode Esc-to-exit. The toggle button itself lives in the
-    // dialogue modebar (injected later, next to the Edit Mode toggle); its
-    // click handler is wired at injection time.
-    document.addEventListener('keydown', e => {
-      if (e.key !== 'Escape') return;
-      if (!state.compareMode) return;
-      // If a cell editor is open, let it handle Esc itself.
-      if (document.querySelector('.compare-cell-editor textarea:focus')) return;
-      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-      setCompareMode(false);
     });
 
     // Drag-drop fallback for loading per-locale .json directly (dev / no manifest).
@@ -3297,24 +2854,6 @@
       refreshNodeList();
     });
 
-    // Compare Mode button — injected into the dialogue modebar so it sits
-    // right next to the Edit Mode toggle (translation-ui.js appends those
-    // first; we append the Compare button after they're in place below).
-    const ensureCompareButtonInModebar = () => {
-      if ($('compare-mode-toggle')) return;
-      const modebar = $('dialogue-modebar');
-      if (!modebar) return;
-      const btn = document.createElement('button');
-      btn.id = 'compare-mode-toggle';
-      btn.type = 'button';
-      btn.className = 'ctrl t-ctrl compare-mode-toggle';
-      btn.dataset.i18n = 'btn.compareLangs';
-      btn.dataset.i18nTitle = 'btn.compareLangs.tip';
-      btn.textContent = '📊 Compare languages';
-      btn.addEventListener('click', toggleCompareMode);
-      modebar.appendChild(btn);
-    };
-
     // Translation tab UI（如果模組有載入的話）。提供 hooks 讓它讀 ui.js 的 state。
     if (typeof TranslationUI !== 'undefined') {
       TranslationUI.install({
@@ -3357,12 +2896,6 @@
         markExported,
         getExportState,
         isExportDirty,
-        // Mutually-exclusive modes: when user toggles Edit Mode on, drop out
-        // of Compare Mode automatically (and vice versa, handled in
-        // setCompareMode).
-        onEditModeChange: (active) => {
-          if (active && state.compareMode) setCompareMode(false);
-        },
         // Translatable UID set for the active script (en-US baseline). Used
         // by the stats / progress bar to render "X / Y translated".
         getActiveProjectUids: collectActiveProjectUids,
@@ -3383,17 +2916,9 @@
         // disclosure is actionable, not just informational).
         toggleStatusFilter,
       });
-      // translation-ui.js's install just populated the modebar with the
-      // Edit Mode toggle + ? button. Append the Compare button after them
-      // so they sit side-by-side, then run i18n so its label localises.
-      ensureCompareButtonInModebar();
       // First-time render of the sidebar status-filter chip bar.
       renderStatusFilterBar();
       applyI18n();
-    } else {
-      // No TranslationUI: still surface the Compare button (modebar is
-      // otherwise empty without translation-ui).
-      ensureCompareButtonInModebar();
     }
 
     // Re-render sidebar chips on UI language switch so labels follow the

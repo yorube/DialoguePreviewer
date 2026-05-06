@@ -254,10 +254,6 @@
     if (STATE.translationMode) ensureLoaded();
     updateStats();
     if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
-    // Notify host so it can keep mutually-exclusive modes (e.g. Compare Mode) in sync.
-    if (STATE.hooks && STATE.hooks.onEditModeChange) {
-      STATE.hooks.onEditModeChange(STATE.translationMode);
-    }
   }
 
   function getOrCreateState(locale) {
@@ -1336,60 +1332,6 @@
     return `${guid}-${nodeIndex}-${srcLine}`;
   }
 
-  // Cross-locale lookup used by the translation-comparison modal in ui.js.
-  // Unlike lookupLine() — which only looks at the current activeLocale —
-  // this reaches into TranslationState[locale] for any locale, so the
-  // comparison reflects imported files + inline edits per language.
-  // Same R2 bundle rule as lookupLine: bundle counts as baseline only
-  // when the locale's text differs from en-US (English-fallback lines
-  // count as untranslated). Compare Mode passes fallbackText sourced
-  // from the locale's AST, but we re-consult the bundle map for the
-  // R2 filter rather than just trusting non-emptiness.
-  function lookupForLocale(locale, uid, fallbackText) {
-    if (!locale || !uid) return { text: fallbackText, status: 'inactive' };
-    if (isSourceLocale(locale)) return { text: fallbackText, status: 'inactive' };
-    const ts = STATE.states.get(locale) || (
-      typeof TranslationState !== 'undefined'
-        ? (() => {
-          const fresh = TranslationState.createState(locale);
-          STATE.states.set(locale, fresh);
-          return fresh;
-         })()
-        : null
-    );
-    if (!ts) return { text: fallbackText, status: 'untranslated' };
-    const text = ts.get(uid);
-    if (text != null && text !== '') {
-      return { text, status: ts.source(uid) };
-    }
-    const bundleMap = STATE.hooks && STATE.hooks.getLocaleBundleMap
-      ? STATE.hooks.getLocaleBundleMap(locale)
-      : null;
-    if (bundleMap && bundleMap.has(uid)) {
-      return { text: fallbackText, status: 'baseline' };
-    }
-    return { text: fallbackText, status: 'untranslated' };
-  }
-
-  // Used by Compare Mode (ui.js) to write edits back to a non-active locale.
-  // Mirrors the inline editor's flow: setOverride → markEditDirty → updateStats.
-  function setOverrideForLocale(locale, uid, text) {
-    if (!locale || !uid) return;
-    if (isSourceLocale(locale)) {
-      throw new Error(`Cannot edit source locale "${locale}"`);
-    }
-    const ts = getOrCreateState(locale);
-    if (!ts) return;
-    ts.setOverride(uid, text);
-    if (STATE.hooks && STATE.hooks.markEditDirty) STATE.hooks.markEditDirty();
-    // Stats reflect the *active* locale; only refresh if that's what we touched.
-    const active = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-    if (active === locale) {
-      updateStats();
-      if (STATE.hooks && STATE.hooks.requestRedraw) STATE.hooks.requestRedraw();
-    }
-  }
-
   // Per-node stats helper used by the sidebar dot/count rendering. ui.js
   // owns the per-node UID index (it knows the active project's AST); we
   // overlay the per-locale TranslationState on top to get the breakdown.
@@ -1461,10 +1403,8 @@
   global.TranslationUI = {
     install,
     lookupLine,
-    lookupForLocale,
     decorateLine,
     getUidFor,
-    setOverrideForLocale,
     setEditMode: setMode,
     // Host calls this after the active script or active locale changes
     // (anywhere the in-memory project / locale data has been swapped).

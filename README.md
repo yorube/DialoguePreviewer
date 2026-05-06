@@ -72,14 +72,6 @@ Symbols in the flat view:
 
 The **?** next to the Edit Mode toggle opens a dedicated guide for these symbols.
 
-### 📊 Compare Mode
-
-Next to the Edit Mode toggle. Swaps the dialogue area for a side-by-side comparison table. One row per line or option, one column per available locale.
-
-Click any non-source cell to edit it directly. You can edit any locale here, not only the active one in the Text-language dropdown. Press **Esc** to leave.
-
-Compare Mode and Edit Mode are mutually exclusive. Turning either on disables the other.
-
 ### Import / Export
 
 - **Import** fully replaces the current locale's state with the file's contents. Existing inline edits are wiped, so export first if you want to keep them. Import also restores translator notes if the file's `Notes` column is populated.
@@ -140,7 +132,7 @@ The four columns on the Dialogue page can be resized. Drag any of the thin verti
 | `R` | Replay current node from the top |
 | `←` / `Backspace` | Step back one line |
 | `Ctrl/Cmd + Enter` | Save inline edit |
-| `Esc` | Cancel inline edit, or exit Compare Mode |
+| `Esc` | Cancel inline edit |
 
 Shortcuts pause while typing in any input or textarea.
 

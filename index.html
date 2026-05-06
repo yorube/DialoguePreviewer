@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MBU Yarn Preview</title>
-<link rel="stylesheet" href="style.css?v=ux-redesign">
+<link rel="stylesheet" href="style.css?v=remove-compare-mode">
 </head>
 <body>
 <nav class="page-tabs" role="tablist">
@@ -125,7 +125,6 @@
         data-i18n="btn.openNote" title="Open notes tab">📝 Note</button>
     </div>
     <div id="transcript" class="transcript"></div>
-    <div id="compare-view" class="compare-view"></div>
   </section>
 
   <div class="splitter" data-split="dialogue-vars"></div>
@@ -143,17 +142,17 @@
      mechanism style.css already uses. Browsers aggressively cache .js
      responses (especially GitHub Pages' CDN), and without this users on
      a tab they kept open across deploys would silently run old code. -->
-<script src="parser.js?v=review-status-11"></script>
-<script src="runtime.js?v=review-status-11"></script>
+<script src="parser.js?v=remove-compare-mode"></script>
+<script src="runtime.js?v=remove-compare-mode"></script>
 <!-- Translation pipeline (porting v2 YarnFileConverter into the browser) -->
 <script src="xlsx.full.min.js"></script>
 <script src="jszip.min.js"></script>
-<script src="yarn-converter.js?v=review-status-11"></script>
-<script src="loc-parser.js?v=review-status-11"></script>
-<script src="loc-writer.js?v=review-status-11"></script>
-<script src="translation-state.js?v=review-status-11"></script>
-<script src="translation-ui.js?v=review-status-11"></script>
-<script src="ui-strings.js?v=review-status-11"></script>
-<script src="ui.js?v=review-status-11"></script>
+<script src="yarn-converter.js?v=remove-compare-mode"></script>
+<script src="loc-parser.js?v=remove-compare-mode"></script>
+<script src="loc-writer.js?v=remove-compare-mode"></script>
+<script src="translation-state.js?v=remove-compare-mode"></script>
+<script src="translation-ui.js?v=remove-compare-mode"></script>
+<script src="ui-strings.js?v=remove-compare-mode"></script>
+<script src="ui.js?v=remove-compare-mode"></script>
 </body>
 </html>
