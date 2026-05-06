@@ -1068,6 +1068,49 @@
     assertEq(wb.SheetNames[0], 'Translations');
   });
 
+  // Rebuild fallback MUST emit DEFLATE-compressed entries — without
+  // compression the zip can balloon ~10x relative to a real Excel xlsx,
+  // which is exactly the bug we hit in production after the surgical-
+  // patch path silently failed. Regression guard: make the rebuild
+  // produce ~10k rows and assert the output is significantly smaller
+  // than the uncompressed XML it represents.
+  test('rebuild path uses DEFLATE compression (no STORE bloat)', async () => {
+    const headers = ['Type', 'Gender', 'CharacterName', 'en-US', 'fr-FR', 'ID'];
+    const rows = [];
+    for (let i = 0; i < 5000; i++) {
+      rows.push([
+        'Dialogue', 'male', 'Speaker' + (i % 50),
+        'English line content number ' + i,
+        'French ligne contenu numero ' + i,
+        'uid-' + i,
+      ]);
+    }
+    const source = {
+      format: 'xlsx', fileName: 'big.xlsx',
+      headers, rows,
+      idCol: 5, localeCol: 4,
+      // intentionally no originalArrayBuffer → forces rebuild path
+    };
+    const merged = new Map();
+    for (let i = 0; i < 5000; i++) merged.set('uid-' + i, 'PATCHED ' + i);
+    const out = await LocWriter.writeLocFile(source, merged, {});
+    const fileBuf = await out.payload.arrayBuffer();
+    // Ratio check: load the resulting zip, sum uncompressed entry sizes,
+    // and assert the COMPRESSED zip output is meaningfully smaller. If
+    // someone removes `compression: true` from XLSX.write, the ratio
+    // collapses to ~1.0 and this test fires.
+    const zip = await JSZip.loadAsync(fileBuf);
+    let uncompressedTotal = 0;
+    for (const name of Object.keys(zip.files)) {
+      if (zip.files[name].dir) continue;
+      const data = await zip.file(name).async('uint8array');
+      uncompressedTotal += data.length;
+    }
+    const ratio = fileBuf.byteLength / uncompressedTotal;
+    assert(ratio < 0.5,
+      `rebuild output ratio ${ratio.toFixed(2)} — expected < 0.5 (DEFLATE compression). Likely missing compression: true on XLSX.write.`);
+  });
+
   // ============================================================
   //  yarn-converter.js
   // ============================================================

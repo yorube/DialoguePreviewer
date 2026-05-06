@@ -65,8 +65,15 @@
             payload: new Blob([buf], { type: XLSX_MIME }),
           };
         } catch (e) {
-          console.warn('[LocWriter] xlsx surgical-patch failed, falling back to rebuild:', e.message);
-          // fall through to buildXlsxBlob
+          // Loud + structured so the user (or me, in their console) can
+          // see EXACTLY why patch bailed when their export comes out
+          // bloated / unstyled — fallback is lossy on both fronts.
+          console.error('[LocWriter] xlsx surgical-patch FAILED — falling back to lossy rebuild');
+          console.error('  reason:', e.message);
+          console.error('  stack:', e.stack);
+          console.error('  fileName:', workingSource.fileName);
+          console.error('  source.originalHeaderCount:', workingSource.originalHeaderCount);
+          console.error('  source.headers.length:', workingSource.headers.length);
         }
       }
       const filledRows = applyTranslationsToRows(workingSource, mergedTranslations, statuses);
@@ -191,8 +198,12 @@
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Translations');
-    // 用 array 輸出，SheetJS 會回 Uint8Array
-    const arr = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    // compression:true → DEFLATE. Without this, SheetJS writes the zip
+    // entries with STORE (no compression), producing files ~10x larger
+    // than the patched / Excel-authored equivalent. Critical for the
+    // fallback path because that's the lossy "we couldn't patch, here's
+    // a rebuild" outcome — should at least not be huge.
+    const arr = XLSX.write(wb, { type: 'array', bookType: 'xlsx', compression: true });
     return new Blob([arr], { type: XLSX_MIME });
   }
 
@@ -291,7 +302,14 @@
     const newXml = new XMLSerializer().serializeToString(xmlDoc);
     zip.file(sheetPath, newXml);
 
-    return await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
+    // level: 9 matches what Excel writes — keeps re-saved files within
+    // the same size envelope as the original (vs JSZip's level 6 default
+    // which is 5-15% bigger).
+    return await zip.generateAsync({
+      type: 'arraybuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 9 },
+    });
   }
 
   // ---- xlsx patch helpers ----
