@@ -10,10 +10,7 @@
 //   rt.choose(idx);     // call after user clicks a choice
 //
 // Events (overridable):
-//   rt.onLine(speaker, text)
-//   rt.onChoices(items)
 //   rt.onVarChange(name, value)
-//   rt.onEnd()
 //   rt.onJump(nodeTitle)
 
 (function (global) {
@@ -162,12 +159,12 @@
       this.currentNodeTitle = null;
       this.current = null;        // pending event for UI
       this.ended = false;
-      this.history = [];          // [{ kind, ... }] accumulated for transcript
+      // historyLen ticks up on every line / choice / chose event. Snapshot
+      // captures it; restore truncates back to it. The host owns the actual
+      // transcript DOM, so we don't need to remember the events themselves.
+      this.historyLen = 0;
       // Hooks (no-ops by default)
-      this.onLine = () => {};
-      this.onChoices = () => {};
       this.onVarChange = () => {};
-      this.onEnd = () => {};
       this.onJump = () => {};
     }
 
@@ -188,7 +185,7 @@
         for (const [k, v] of overrides) this.vars[k] = v;
       }
       this.stack = [];
-      this.history = [];
+      this.historyLen = 0;
       this.ended = false;
       this.current = null;
       this._enterNode(nodeTitle);
@@ -237,7 +234,6 @@
         if (this.ended) return;
         if (!this.stack.length) {
           this.ended = true;
-          this.onEnd();
           return;
         }
         const frame = this.stack[this.stack.length - 1];
@@ -259,8 +255,7 @@
               srcLine: s.srcLine,
             };
             this.current = evt;
-            this.history.push({ ...evt });
-            this.onLine(s.speaker, s.text);
+            this.historyLen++;
             return;
           }
 
@@ -277,11 +272,7 @@
               items: visible.map(it => ({ text: it.text, _body: it.body, srcLine: it.srcLine })),
               srcLine: s.srcLine,
             };
-            this.history.push({
-              kind: 'choices',
-              items: visible.map(it => ({ text: it.text }))
-            });
-            this.onChoices(this.current.items);
+            this.historyLen++;
             return;
           }
 
@@ -318,7 +309,6 @@
 
           case 'end':
             this.ended = true;
-            this.onEnd();
             return;
 
           case 'wait':
@@ -351,7 +341,7 @@
       if (!this.current || this.current.kind !== 'choices') return;
       const item = this.current.items[idx];
       if (!item) return;
-      this.history.push({ kind: 'chose', text: item.text });
+      this.historyLen++;
       // Push the option body as a new frame
       this.stack.push({ stmts: item._body, idx: 0 });
       this.current = null;
@@ -370,7 +360,7 @@
           items: this.current.items && this.current.items.map(it => ({ ...it }))
         },
         ended: this.ended,
-        historyLen: this.history.length
+        historyLen: this.historyLen
       };
     }
 
@@ -383,7 +373,7 @@
         items: s.current.items && s.current.items.map(it => ({ ...it }))
       };
       this.ended = s.ended;
-      this.history.length = s.historyLen;
+      this.historyLen = s.historyLen;
     }
   }
 

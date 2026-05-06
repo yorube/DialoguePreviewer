@@ -1696,23 +1696,26 @@
     return row;
   }
 
-  // 給 translation-ui 用：算出當前行/選項的 UID（v2 一致：en-US source guid + nodeIndex + lineNumber）
-  function computeLineUid(srcLine) {
-    if (srcLine == null) return null;
+  // v2-compatible UID = en-US source guid + nodeIndex + srcLine. Resolves the
+  // active group's en-US filename + asks translation-ui.js for the formatted UID.
+  function uidFor(nodeIndex, srcLine) {
+    if (srcLine == null || nodeIndex == null) return null;
     if (!state.activeGroup) return null;
     const groupMap = state.groups.get(state.activeGroup);
-    if (!groupMap) return null;
-    const enEntry = groupMap.get('en-US');
+    const enEntry = groupMap && groupMap.get('en-US');
     if (!enEntry) return null;
-    const proj = activeProject();
-    if (!proj) return null;
-    // currentNodeTitle() works in both navigation-only and playback states.
-    const nodeTitle = currentNodeTitle();
-    if (!nodeTitle) return null;
-    const nodeData = proj.nodes.get(nodeTitle);
-    if (!nodeData || nodeData.nodeIndex == null) return null;
     if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return null;
-    return TranslationUI.getUidFor(enEntry.filename, nodeData.nodeIndex, srcLine);
+    return TranslationUI.getUidFor(enEntry.filename, nodeIndex, srcLine);
+  }
+
+  // Wrapper used by transcript paths: pulls nodeIndex from the currently active
+  // node (works in both navigation-only and playback states).
+  function computeLineUid(srcLine) {
+    const proj = activeProject();
+    const nodeTitle = currentNodeTitle();
+    if (!proj || !nodeTitle) return null;
+    const nodeData = proj.nodes.get(nodeTitle);
+    return uidFor(nodeData && nodeData.nodeIndex, srcLine);
   }
 
   // 把 transcript 行的譯文/原文挑出來：
@@ -1917,7 +1920,7 @@
       row.appendChild(document.createTextNode(': '));
     }
     const original = stmt.text || '';
-    const uid = uidForFlat(nodeCtx, stmt.srcLine);
+    const uid = uidFor(nodeCtx.nodeIndex, stmt.srcLine);
     const info = uid && TranslationUI.lookupLine
       ? TranslationUI.lookupLine(uid, original)
       : { text: original, status: 'inactive', uid: null };
@@ -1940,7 +1943,7 @@
       arrow.textContent = `→ ${idx + 1}.`;
       row.appendChild(arrow);
       const original = item.text || '';
-      const uid = uidForFlat(nodeCtx, item.srcLine);
+      const uid = uidFor(nodeCtx.nodeIndex, item.srcLine);
       const info = uid && TranslationUI.lookupLine
         ? TranslationUI.lookupLine(uid, original)
         : { text: original, status: 'inactive', uid: null };
@@ -2053,106 +2056,75 @@
     setTimeout(() => el.classList.remove('flash-target'), 1600);
   }
 
-  function uidForFlat(nodeCtx, srcLine) {
-    if (srcLine == null) return null;
-    if (!state.activeGroup) return null;
+  // Walk the active script's en-US project; for every translatable line /
+  // choice option, call visit(uid, node). Centralises the AST traversal so
+  // collectActiveProjectUids + collectPerNodeUidIndex share one walker.
+  function walkTranslatableUids(visit) {
+    if (!state.activeGroup) return;
     const groupMap = state.groups.get(state.activeGroup);
-    if (!groupMap) return null;
+    if (!groupMap) return;
     const enEntry = groupMap.get('en-US');
-    if (!enEntry) return null;
-    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return null;
-    return TranslationUI.getUidFor(enEntry.filename, nodeCtx.nodeIndex, srcLine);
-  }
-
-  // Walk the active script's en-US project and return the UID set of every
-  // translatable line / choice option. Used by translation-ui.js to render
-  // "X / Y translated" stats and the progress bar.
-  //
-  // Cached by (activeGroup, en-US project identity). The project object is
-  // stable for the lifetime of an entry — it's only replaced when the
-  // script is reloaded. Stats updates can therefore reuse the result for
-  // every keystroke / inline edit without re-walking thousands of nodes.
-  const __projectUidCache = new WeakMap(); // project → Set<uid>
-  function collectActiveProjectUids() {
-    if (!state.activeGroup) return new Set();
-    const groupMap = state.groups.get(state.activeGroup);
-    if (!groupMap) return new Set();
-    const enEntry = groupMap.get('en-US');
-    if (!enEntry || !enEntry.project) return new Set();
-    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return new Set();
-
-    const cached = __projectUidCache.get(enEntry.project);
-    if (cached) return cached;
-
-    const out = new Set();
-    const visit = (statements, nodeIndex) => {
+    if (!enEntry || !enEntry.project) return;
+    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return;
+    const visitStmts = (statements, node) => {
       for (const s of statements) {
         if (s.type === 'line') {
-          const uid = TranslationUI.getUidFor(enEntry.filename, nodeIndex, s.srcLine);
-          if (uid) out.add(uid);
+          const uid = TranslationUI.getUidFor(enEntry.filename, node.nodeIndex, s.srcLine);
+          if (uid) visit(uid, node);
         } else if (s.type === 'choices') {
           for (const item of s.items) {
-            const uid = TranslationUI.getUidFor(enEntry.filename, nodeIndex, item.srcLine);
-            if (uid) out.add(uid);
-            if (item.body) visit(item.body, nodeIndex);
+            const uid = TranslationUI.getUidFor(enEntry.filename, node.nodeIndex, item.srcLine);
+            if (uid) visit(uid, node);
+            if (item.body) visitStmts(item.body, node);
           }
         } else if (s.type === 'if') {
-          if (s.then) visit(s.then, nodeIndex);
-          if (s.else) visit(s.else, nodeIndex);
+          if (s.then) visitStmts(s.then, node);
+          if (s.else) visitStmts(s.else, node);
         }
       }
     };
-
     for (const node of enEntry.project.nodes.values()) {
       if (!node || !node.statements) continue;
-      visit(node.statements, node.nodeIndex);
+      visitStmts(node.statements, node);
     }
-    __projectUidCache.set(enEntry.project, out);
+  }
+
+  // Cache key on en-US project identity — stable for an entry's lifetime,
+  // only replaced when the script reloads. Stats updates reuse cached result
+  // across keystrokes / inline edits without re-walking thousands of nodes.
+  const __projectUidCache = new WeakMap();        // project → Set<uid>
+  const __projectPerNodeUidCache = new WeakMap(); // project → Map<title, Set<uid>>
+
+  function activeEnProject() {
+    if (!state.activeGroup) return null;
+    const groupMap = state.groups.get(state.activeGroup);
+    const enEntry = groupMap && groupMap.get('en-US');
+    return enEntry && enEntry.project || null;
+  }
+
+  function collectActiveProjectUids() {
+    const proj = activeEnProject();
+    if (!proj) return new Set();
+    const cached = __projectUidCache.get(proj);
+    if (cached) return cached;
+    const out = new Set();
+    walkTranslatableUids((uid) => out.add(uid));
+    __projectUidCache.set(proj, out);
     return out;
   }
 
-  // Per-node UID index — same walk as collectActiveProjectUids but groups by
-  // node title. Sidebar dots + per-node progress + flat-view bulk actions
-  // all consume this. Cached per-project (UID set is determined by AST,
-  // doesn't change with locale or translation state).
-  const __projectPerNodeUidCache = new WeakMap(); // project → Map<title, Set<uid>>
   function collectPerNodeUidIndex() {
-    if (!state.activeGroup) return new Map();
-    const groupMap = state.groups.get(state.activeGroup);
-    if (!groupMap) return new Map();
-    const enEntry = groupMap.get('en-US');
-    if (!enEntry || !enEntry.project) return new Map();
-    if (typeof TranslationUI === 'undefined' || !TranslationUI.getUidFor) return new Map();
-
-    const cached = __projectPerNodeUidCache.get(enEntry.project);
+    const proj = activeEnProject();
+    if (!proj) return new Map();
+    const cached = __projectPerNodeUidCache.get(proj);
     if (cached) return cached;
-
     const out = new Map();
-    const visit = (statements, nodeIndex, bucket) => {
-      for (const s of statements) {
-        if (s.type === 'line') {
-          const uid = TranslationUI.getUidFor(enEntry.filename, nodeIndex, s.srcLine);
-          if (uid) bucket.add(uid);
-        } else if (s.type === 'choices') {
-          for (const item of s.items) {
-            const uid = TranslationUI.getUidFor(enEntry.filename, nodeIndex, item.srcLine);
-            if (uid) bucket.add(uid);
-            if (item.body) visit(item.body, nodeIndex, bucket);
-          }
-        } else if (s.type === 'if') {
-          if (s.then) visit(s.then, nodeIndex, bucket);
-          if (s.else) visit(s.else, nodeIndex, bucket);
-        }
-      }
-    };
-
-    for (const node of enEntry.project.nodes.values()) {
-      if (!node || !node.statements) continue;
-      const bucket = new Set();
-      visit(node.statements, node.nodeIndex, bucket);
-      out.set(node.title, bucket);
-    }
-    __projectPerNodeUidCache.set(enEntry.project, out);
+    walkTranslatableUids((uid, node) => {
+      let bucket = out.get(node.title);
+      if (!bucket) { bucket = new Set(); out.set(node.title, bucket); }
+      bucket.add(uid);
+    });
+    __projectPerNodeUidCache.set(proj, out);
     return out;
   }
 
@@ -2182,13 +2154,14 @@
   // stable for an entry's lifetime; replaced on script reload, which
   // naturally invalidates.
   const __bundleTextCache = new WeakMap();   // localeProject → Map<uid, text>
-  function collectLocaleBundleMap(locale) {
+  function collectLocaleBundleMap(locale, group) {
     if (!locale) return new Map();
     if (locale === 'en-US' || locale === 'zh-TW' || locale === 'unknown') {
       return new Map();
     }
-    if (!state.activeGroup) return new Map();
-    const groupMap = state.groups.get(state.activeGroup);
+    if (group == null) group = state.activeGroup;
+    if (!group) return new Map();
+    const groupMap = state.groups.get(group);
     if (!groupMap) return new Map();
     const enEntry = groupMap.get('en-US');
     const localeEntry = groupMap.get(locale);
@@ -2236,32 +2209,21 @@
     return out;
   }
 
-  // Like collectLocaleBundleMap but unions the bundle map across every
-  // group that has BOTH en-US and the target locale loaded — not just
-  // the active group. The export pipeline (buildSyntheticSource) emits
-  // rows from every loaded en-US group; without this, rows from non-
-  // active groups would have empty translation cells in the exported
-  // CSV even though the data sits right there in the locale's bundled
-  // .json. Cache piggy-backs on the per-group cache via a recursive
-  // call (each individual collectLocaleBundleMap call still hits its
-  // WeakMap), so re-export is cheap.
+  // Union the bundle map across every group that has BOTH en-US and the
+  // target locale loaded — not just the active one. The export pipeline
+  // (buildSyntheticSource) emits rows from every loaded en-US group; without
+  // this, rows from non-active groups would have empty translation cells in
+  // the exported CSV even though the data sits in the locale's bundled .json.
+  // Each per-group call still hits the WeakMap cache, so re-export is cheap.
   function collectLocaleBundleMapAllGroups(locale) {
     if (!locale || locale === 'en-US' || locale === 'zh-TW' || locale === 'unknown') {
       return new Map();
     }
     const out = new Map();
-    const savedActive = state.activeGroup;
-    try {
-      for (const [group, localesMap] of state.groups) {
-        if (!localesMap.has('en-US') || !localesMap.has(locale)) continue;
-        // Temporarily flip activeGroup so collectLocaleBundleMap (which
-        // is keyed off it) walks the right group. Restored below.
-        state.activeGroup = group;
-        const m = collectLocaleBundleMap(locale);
-        for (const [uid, text] of m) out.set(uid, text);
-      }
-    } finally {
-      state.activeGroup = savedActive;
+    for (const [group, localesMap] of state.groups) {
+      if (!localesMap.has('en-US') || !localesMap.has(locale)) continue;
+      const m = collectLocaleBundleMap(locale, group);
+      for (const [uid, text] of m) out.set(uid, text);
     }
     return out;
   }

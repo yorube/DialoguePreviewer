@@ -904,13 +904,6 @@
     return 'ok';
   }
 
-  function getStatusForActiveLocale(uid) {
-    const activeLocale = STATE.hooks && STATE.hooks.getActiveLocale && STATE.hooks.getActiveLocale();
-    if (!activeLocale || isSourceLocale(activeLocale)) return null;
-    const ts = getOrCreateState(activeLocale);
-    return ts ? ts.getStatus(uid) : null;
-  }
-
   function openInlineEditor(rowEl, uid, currentText) {
     if (rowEl.querySelector('.t-inline-editor')) return;
 
@@ -1413,8 +1406,6 @@
     refreshExportStatus,
     // Status-related public API consumed by ui.js (sidebar, flat-view header).
     bulkSetStatusForActiveLocale,
-    getStatusForActiveLocale,
     perNodeStatsForActiveLocale,
-    closeStatusMenu,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
