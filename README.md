@@ -10,7 +10,7 @@ For the bare-minimum starter, see [QUICKSTART.md](QUICKSTART.md).
 
 A tab strip at the very top switches between two independent tools:
 
-- **💬 Dialogue / 對話**. Yarn dialogue files, organised by script and node.
+- **💬 Dialogue / 對話**. Yarn dialogue files, organized by script and node.
 - **🧩 UI strings / UI 字串**. The multi-sheet `翻譯對照表` xlsx for in-game UI copy (item names, sign descriptions, menu copy, character names).
 
 Each page has its own Import / Export. They don't share state. Your last-active page is remembered across reloads.

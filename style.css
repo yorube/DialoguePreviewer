@@ -1622,7 +1622,7 @@ body.t-edit-mode .flat-edit-view { display: block; }
 }
 
 /* ============================================================================
-   Page tabs (Dialogue / UI Strings) — top-level navigation
+   Page tabs (Dialogue / UI strings) — top-level navigation
    ============================================================================ */
 .page-tabs {
   display: flex;
@@ -1729,7 +1729,7 @@ body.page-ui-strings #page-dialogue { display: none; }
 }
 
 /* ============================================================================
-   UI Strings page (separate page; ui-strings.js owns the rendering)
+   UI strings page (separate page; ui-strings.js owns the rendering)
    ============================================================================ */
 #page-ui-strings { display: none; flex: 1; flex-direction: column; min-height: 0; }
 body.page-ui-strings #page-ui-strings { display: flex; }

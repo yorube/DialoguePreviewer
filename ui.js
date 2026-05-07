@@ -381,7 +381,7 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // §7b UID Searcher
+  // §7b UID search
   // ─────────────────────────────────────────────────────────────────────────
   // Paste a UID ({en-US-guid}-{nodeIndex}-{srcLine}); on success the previewer
   // jumps to the matching script + node and prints the line text in the
@@ -2017,7 +2017,7 @@
       if (e.dataTransfer.files.length) ingestFiles(e.dataTransfer.files);
     });
 
-    // UID Searcher (sidebar). Submit jumps to the matching script + node and
+    // UID search (sidebar). Submit jumps to the matching script + node and
     // prints the line beneath the input. Empty submissions clear the result.
     const uidForm = $('uid-search-form');
     const uidInput = $('uid-search-input');
