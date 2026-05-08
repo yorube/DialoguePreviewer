@@ -196,6 +196,12 @@
       'help.btn.tip': 'Open the help dialog',
       'help.title': 'How to use this previewer',
       'help.body': `
+<h3>Switch text language</h3>
+<ul>
+  <li>The <b>Text language</b> selector in the top bar picks which locale the dialogue panel renders and which file your import / export targets. Switch it before doing either.</li>
+  <li>en-US and zh-TW are source languages (read-only original text). fr-FR / ru-RU / it-IT / es-ES / ja-JP are target languages — what you translate into.</li>
+</ul>
+
 <h3>Preview a script</h3>
 <ul>
   <li>Pick the <b>Script</b> in the sidebar and the <b>Text language</b> in the top bar.</li>
@@ -433,6 +439,12 @@
       'help.btn.tip': '開啟說明視窗',
       'help.title': '使用說明',
       'help.body': `
+<h3>切換文本語言</h3>
+<ul>
+  <li>上方的「文本語言」選單決定對話區顯示哪個語言、以及匯入 / 匯出對應到哪份檔案。匯入翻譯檔或開始編輯前先切過去。</li>
+  <li>en-US 跟 zh-TW 是來源語言（唯讀原文）。fr-FR / ru-RU / it-IT / es-ES / ja-JP 是翻譯目標 — 你會匯入 / 編輯的就是這些。</li>
+</ul>
+
 <h3>預覽劇本</h3>
 <ul>
   <li>在 sidebar 選 <b>劇本</b>，在上方選 <b>文本語言</b>。</li>
