@@ -6,8 +6,8 @@
 //     Type, Gender, CharacterName, en-US, {locale}, ID
 //   翻譯人員精簡版 xlsx (5 欄，無 Gender)：
 //     Type, CharacterName, en-US, {locale}, ID
-//   未來可能的 8 欄版（v2 加上 FileName/NodeTitle）：
-//     Type, Gender, CharacterName, en-US, {locale}, ID, FileName, NodeTitle
+//   未來可能的 8 欄版（v2 加上 Script/NodeTitle）：
+//     Type, Gender, CharacterName, en-US, {locale}, ID, Script, NodeTitle
 //
 // 解析時不依賴欄位順序，靠 header 名稱定位 ID 跟翻譯欄。
 // 全域 export：window.LocParser.parseFile

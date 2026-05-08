@@ -851,25 +851,25 @@ async function runIntegrationSuite(page) {
       const aoa = captured.aoa;
       const headers = aoa[0];
       const idx = (n) => headers.findIndex(h => String(h).toLowerCase() === n.toLowerCase());
-      const fileCol   = idx('FileName');
+      const scriptCol = idx('Script');
       const localeCol = idx(targetLocale);
       const genderCol = idx('Gender');
-      if (fileCol === -1) throw new Error('exported workbook has no FileName column');
+      if (scriptCol === -1) throw new Error('exported workbook has no Script column');
       if (localeCol === -1) throw new Error(`exported workbook has no ${targetLocale} column`);
       if (genderCol === -1) throw new Error('exported workbook has no Gender column');
 
-      const perFile = {};
+      const perScript = {};
       const genderValues = new Set();
       for (let i = 1; i < aoa.length; i++) {
         const row = aoa[i];
         if (!row || row.every(c => !c && c !== 0)) continue;
-        const file = row[fileCol] || '<no-file>';
-        const txt  = row[localeCol] || '';
-        const g    = String(row[genderCol] || '').trim();
+        const script = row[scriptCol] || '<no-script>';
+        const txt    = row[localeCol] || '';
+        const g      = String(row[genderCol] || '').trim();
         genderValues.add(g);
-        if (!perFile[file]) perFile[file] = { total: 0, withTr: 0 };
-        perFile[file].total++;
-        if (txt && String(txt).trim()) perFile[file].withTr++;
+        if (!perScript[script]) perScript[script] = { total: 0, withTr: 0 };
+        perScript[script].total++;
+        if (txt && String(txt).trim()) perScript[script].withTr++;
       }
 
       // Every gender value must be one of the expanded labels — no blanks,
@@ -880,13 +880,13 @@ async function runIntegrationSuite(page) {
         throw new Error(`unexpected Gender values in export: ${JSON.stringify(bad)} (allowed: male/female/none)`);
       }
 
-      const fileCount = Object.keys(perFile).length;
-      if (fileCount < 2) {
-        throw new Error(`expected rows from ≥2 scripts in export, got ${fileCount}: ${Object.keys(perFile).join(', ')}`);
+      const scriptCount = Object.keys(perScript).length;
+      if (scriptCount < 2) {
+        throw new Error(`expected rows from ≥2 scripts in export, got ${scriptCount}: ${Object.keys(perScript).join(', ')}`);
       }
-      for (const [f, g] of Object.entries(perFile)) {
+      for (const [s, g] of Object.entries(perScript)) {
         if (g.total > 0 && g.withTr === 0) {
-          throw new Error(`script "${f}" has 0/${g.total} translated cells in export — bundle map didn't cover it`);
+          throw new Error(`script "${s}" has 0/${g.total} translated cells in export — bundle map didn't cover it`);
         }
       }
     });

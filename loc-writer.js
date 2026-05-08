@@ -1,7 +1,7 @@
 // loc-writer.js
 // 把譯者上傳的檔案結構（headers + rows + idCol/localeCol）拿出來，
 // 把翻譯欄填上「baseline + overrides 合併後的最新譯文」，原檔的其他欄位（Type / Gender /
-// CharacterName / en-US / FileName / NodeTitle…）一律保留。
+// CharacterName / en-US / Script / NodeTitle…）一律保留。
 //
 // xlsx 路徑優先走 surgical-patch (patchXlsxBytes): 直接編輯使用者上傳的
 // 原 xlsx ArrayBuffer 內的 sheet XML, 只動目標 cells, 其他 cell 樣式 / sheet
@@ -254,7 +254,7 @@
       patchCols.add(source.localeCol);
     }
     if (statusCol >= 0) patchCols.add(statusCol);
-    // Any column added by augmentSourceForExport (FileName / NodeTitle /
+    // Any column added by augmentSourceForExport (Script / NodeTitle /
     // Notes / ReviewStatus when they didn't exist) — always emit.
     for (let c = originalCols; c < source.headers.length; c++) patchCols.add(c);
 

@@ -1254,7 +1254,7 @@
       const ctx = exportCtx();
       let source;
       if (uploadedSource) {
-        // Add FileName / NodeTitle / Notes / ReviewStatus columns so notes
+        // Add Script / NodeTitle / Notes / ReviewStatus columns so notes
         // and statuses travel with the export. No-op when the source already
         // has them and the relevant data is empty.
         source = TranslationExport.augmentSourceForExport(uploadedSource, ctx);
